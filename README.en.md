@@ -1,54 +1,51 @@
 # weixin-mcp
 
-MCP server for WeChat messaging — expose WeChat capabilities as MCP tools for Claude Desktop, Cursor, and other MCP clients.
+[![npm version](https://img.shields.io/npm/v/weixin-mcp.svg)](https://www.npmjs.com/package/weixin-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[中文](./README.md)
+🤖 **WeChat MCP Server** — Let AI assistants send and receive WeChat messages
 
-## Quick Start
+Expose WeChat capabilities as [MCP](https://modelcontextprotocol.io/) tools. Claude Desktop, Cursor, OpenClaw, and other AI assistants can directly:
+
+- 📨 **Send messages** — text, images, files, videos
+- 📬 **Receive messages** — polling or real-time Webhook push
+- 👥 **Manage contacts** — auto-track conversation users
+
+[中文](./README.md) | [ClawHub Skill](https://clawhub.com/skills/weixin-mcp)
+
+---
+
+## ✨ Features
+
+- **Zero config** — scan QR to login, no official account needed
+- **All message types** — text / image / file / video
+- **Real-time push** — Webhook mode for instant delivery
+- **Multi-account** — run multiple instances in different directories
+- **MCP standard** — compatible with all MCP clients
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# 1. Login (scan QR code)
+# 1. QR code login
 npx weixin-mcp login
 
 # 2. Check status
 npx weixin-mcp status
 
-# 3. Start MCP server (stdio mode for Claude Desktop)
+# 3. Send a test message
+npx weixin-mcp send <userId> "Hello from CLI!"
+
+# 4. Start MCP server
 npx weixin-mcp
 ```
 
-## CLI Commands
+---
 
-| Command | Description |
-|---------|-------------|
-| `npx weixin-mcp login` | QR code login |
-| `npx weixin-mcp status` | Show account and daemon status |
-| `npx weixin-mcp` | Start stdio MCP server (Claude Desktop) |
-| `npx weixin-mcp start [--port n]` | Start HTTP daemon (background, default 3001) |
-| `npx weixin-mcp stop` | Stop daemon |
-| `npx weixin-mcp restart` | Restart daemon |
-| `npx weixin-mcp logs [-f]` | View daemon logs (-f for follow) |
-| `npx weixin-mcp send <userId> <text>` | Send message (supports short ID prefix) |
-| `npx weixin-mcp poll [--watch] [--reset]` | Poll messages (--watch for continuous) |
-| `npx weixin-mcp contacts` | List contacts (users who messaged the bot) |
-| `npx weixin-mcp accounts [list]` | List all accounts |
-| `npx weixin-mcp accounts remove <id>` | Remove an account |
-| `npx weixin-mcp accounts clean` | Remove duplicates (keep newest per userId) |
-| `npx weixin-mcp update` | Check and install latest version |
-| `npx weixin-mcp --version` | Print version |
+## 🔌 Claude Desktop Integration
 
-### Short ID Matching
-
-When sending messages, you can use a prefix of the user ID if it uniquely matches a contact:
-
-```bash
-npx weixin-mcp send abc12 "hello"
-# Resolved "abc12" → abc123xyz456@im.wechat
-```
-
-## Claude Desktop Integration
-
-Add to `claude_desktop_config.json`:
+Edit `claude_desktop_config.json`:
 
 ```json
 {
@@ -61,47 +58,94 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-## HTTP Daemon Mode
+Restart Claude Desktop. Now Claude can send and receive WeChat messages for you!
 
-Start an HTTP daemon for multi-client connections:
+---
+
+## 🛠️ CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `login` | QR code login |
+| `status` | Show account and daemon status |
+| `send <to> <text>` | Send message (supports short ID) |
+| `poll [--watch]` | Poll messages |
+| `contacts` | List contacts |
+| `start [--webhook url]` | Start HTTP daemon |
+| `stop` / `restart` | Stop/restart daemon |
+| `logs [-f]` | View logs |
+| `accounts list\|clean\|remove` | Manage accounts |
+| `update` | Update to latest version |
+
+### Short ID Matching
+
+Use a prefix instead of full ID when unique:
 
 ```bash
-npx weixin-mcp start --port 3001
+npx weixin-mcp send abc12 "hello"
+# ✓ Resolved "abc12" → abc123xyz456@im.wechat
 ```
 
-- MCP endpoint: `http://localhost:3001/mcp` (StreamableHTTP)
-- Health check: `http://localhost:3001/health`
+---
 
-## MCP Tools
+## 🔧 MCP Tools
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `weixin_send` | Send text message | `to`, `text`, `context_token` (optional) |
-| `weixin_poll` | Poll new messages | `reset_cursor` (optional) |
-| `weixin_contacts` | List contacts | none |
-| `weixin_get_config` | Get user config | `user_id`, `context_token` (optional) |
+| `weixin_send` | Send text | `to`, `text`, `context_token?` |
+| `weixin_send_image` | Send image | `to`, `source`, `caption?` |
+| `weixin_send_file` | Send file | `to`, `source`, `caption?` |
+| `weixin_poll` | Poll messages | `reset_cursor?` |
+| `weixin_contacts` | List contacts | - |
+| `weixin_get_config` | Get config | `user_id` |
 
-## Data Storage
+---
 
-Priority:
-1. `WEIXIN_MCP_DIR` environment variable
-2. `~/.openclaw/openclaw-weixin/` (if OpenClaw installed)
-3. `~/.weixin-mcp/` (default)
+## 📡 Webhook Mode
 
-Files:
-- `accounts/<accountId>.json` — account token
-- `accounts/<accountId>.cursor.json` — message cursor
-- `contacts.json` — contact book
-- `daemon.json` — daemon PID (HTTP mode only)
-- `daemon.log` — daemon logs
+Receive messages in real-time:
 
-## Environment Variables
+```bash
+npx weixin-mcp start --webhook http://your-server/weixin-hook
+```
 
-| Variable | Description |
-|----------|-------------|
-| `WEIXIN_MCP_DIR` | Custom data directory |
-| `WEIXIN_ACCOUNT_ID` | Specify which account to use |
+Messages are POSTed to your webhook:
 
-## License
+```json
+{
+  "event": "weixin_messages",
+  "messages": [{
+    "from_user_id": "...",
+    "item_list": [{"type": 1, "text_item": {"text": "Hello"}}],
+    "context_token": "..."
+  }],
+  "timestamp": "2026-03-22T19:00:00.000Z"
+}
+```
 
-MIT
+---
+
+## 🏠 Data Storage
+
+Priority: `$WEIXIN_MCP_DIR` > `~/.openclaw/openclaw-weixin/` > `~/.weixin-mcp/`
+
+| File | Description |
+|------|-------------|
+| `accounts/*.json` | Login credentials |
+| `contacts.json` | Contact book |
+| `daemon.json` | Daemon state |
+| `daemon.log` | Logs |
+
+---
+
+## 🔗 Related Projects
+
+- [OpenClaw](https://github.com/anthropics/openclaw) — AI Agent Infrastructure
+- [MCP Protocol](https://modelcontextprotocol.io/) — Model Context Protocol
+- [ClawHub](https://clawhub.com/) — Agent Skills Marketplace
+
+---
+
+## 📄 License
+
+MIT © [bkmashiro](https://github.com/bkmashiro)
