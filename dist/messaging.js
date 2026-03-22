@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ACCOUNTS_DIR } from "./paths.js";
 import { DEFAULT_BASE_URL, sendTextMessage, getUpdates, loadCursor, saveCursor, } from "./api.js";
+import { updateContactsFromMsgs } from "./contacts.js";
 function loadAccount() {
     const files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
     if (files.length === 0)
@@ -67,6 +68,7 @@ export async function cliPoll(args) {
                     saveCursor(accountId, cursor);
                 }
                 if (resp.msgs && resp.msgs.length > 0) {
+                    updateContactsFromMsgs(resp.msgs);
                     const ts = new Date().toLocaleTimeString();
                     for (const msg of resp.msgs) {
                         console.log(`[${ts}] ${formatMsg(msg)}`);
@@ -86,6 +88,8 @@ export async function cliPoll(args) {
         const resp = await getUpdates(token, baseUrl, cursor);
         if (resp.get_updates_buf)
             saveCursor(accountId, resp.get_updates_buf);
+        if (resp.msgs && resp.msgs.length > 0)
+            updateContactsFromMsgs(resp.msgs);
         const msgs = resp.msgs ?? [];
         if (msgs.length === 0) {
             console.log("No new messages.");

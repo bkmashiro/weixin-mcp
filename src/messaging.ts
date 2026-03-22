@@ -14,6 +14,7 @@ import {
   loadCursor,
   saveCursor,
 } from "./api.js";
+import { updateContactsFromMsgs } from "./contacts.js";
 
 interface AccountData { token?: string; baseUrl?: string; userId?: string }
 
@@ -80,6 +81,7 @@ export async function cliPoll(args: string[]) {
           saveCursor(accountId, cursor);
         }
         if (resp.msgs && resp.msgs.length > 0) {
+          updateContactsFromMsgs(resp.msgs as unknown[]);
           const ts = new Date().toLocaleTimeString();
           for (const msg of resp.msgs) {
             console.log(`[${ts}] ${formatMsg(msg as Record<string, unknown>)}`);
@@ -96,6 +98,7 @@ export async function cliPoll(args: string[]) {
     const cursor = reset ? "" : loadCursor(accountId);
     const resp = await getUpdates(token!, baseUrl, cursor);
     if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
+    if (resp.msgs && resp.msgs.length > 0) updateContactsFromMsgs(resp.msgs as unknown[]);
 
     const msgs = resp.msgs ?? [];
     if (msgs.length === 0) {

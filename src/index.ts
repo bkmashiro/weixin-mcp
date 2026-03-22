@@ -23,6 +23,7 @@ import {
   WeixinNetworkError,
 } from "./api.js";
 import { ACCOUNTS_DIR } from "./paths.js";
+import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
 
 // ── Auth / config ──────────────────────────────────────────────────────────
 
@@ -111,6 +112,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "weixin_contacts",
+      description:
+        "List users who have messaged the bot. Returns userId, lastSeen, lastText, contextToken, msgCount. Use userId as 'to' in weixin_send.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
       name: "weixin_get_config",
       description:
         "Get bot config for a user — includes typing_ticket needed for sendTyping. Call before sending typing indicators.",
@@ -156,7 +163,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const resp = await getUpdates(token!, baseUrl, cursor);
       // Persist new cursor for next poll
       if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
+      if (resp.msgs && resp.msgs.length > 0) updateContactsFromMsgs(resp.msgs as unknown[]);
       result = resp;
+    } else if (name === "weixin_contacts") {
+      result = Object.values(loadContacts());
     } else if (name === "weixin_get_config") {
       const { user_id, context_token } = (args ?? {}) as {
         user_id?: string;
