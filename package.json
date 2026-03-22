@@ -1,6 +1,6 @@
 {
   "name": "weixin-mcp",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "MCP server for WeChat — send text, images, files, videos; receive via webhook; works with Claude Desktop, Cursor, OpenClaw",
   "type": "module",
   "main": "dist/index.js",
