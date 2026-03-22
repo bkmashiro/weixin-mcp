@@ -53,3 +53,13 @@ export declare function sendFileMessage(to: string, uploaded: UploadedMedia, tok
  * Send a video message using a previously uploaded file.
  */
 export declare function sendVideoMessage(to: string, uploaded: UploadedMedia, token: string, baseUrl: string, contextToken?: string, caption?: string): Promise<void>;
+export type MediaSendType = "image" | "file" | "video";
+export declare function sendMediaMessage(opts: {
+    to: string;
+    mediaType: MediaSendType;
+    uploaded: UploadedMedia;
+    caption?: string;
+    token: string;
+    baseUrl: string;
+    contextToken?: string;
+}): Promise<void>;

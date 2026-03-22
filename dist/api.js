@@ -249,3 +249,15 @@ export async function sendVideoMessage(to, uploaded, token, baseUrl, contextToke
         }, token, baseUrl);
     }
 }
+export async function sendMediaMessage(opts) {
+    switch (opts.mediaType) {
+        case "image":
+            return sendImageMessage(opts.to, opts.uploaded, opts.token, opts.baseUrl, opts.contextToken, opts.caption);
+        case "file":
+            return sendFileMessage(opts.to, opts.uploaded, opts.token, opts.baseUrl, opts.contextToken, opts.caption);
+        case "video":
+            return sendVideoMessage(opts.to, opts.uploaded, opts.token, opts.baseUrl, opts.contextToken, opts.caption);
+        default:
+            throw new Error(`Unknown media type: ${opts.mediaType}`);
+    }
+}

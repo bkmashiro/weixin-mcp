@@ -355,3 +355,28 @@ export async function sendVideoMessage(
     );
   }
 }
+
+// ── Unified media sender for CLI ───────────────────────────────────────────
+
+export type MediaSendType = "image" | "file" | "video";
+
+export async function sendMediaMessage(opts: {
+  to: string;
+  mediaType: MediaSendType;
+  uploaded: UploadedMedia;
+  caption?: string;
+  token: string;
+  baseUrl: string;
+  contextToken?: string;
+}) {
+  switch (opts.mediaType) {
+    case "image":
+      return sendImageMessage(opts.to, opts.uploaded, opts.token, opts.baseUrl, opts.contextToken, opts.caption);
+    case "file":
+      return sendFileMessage(opts.to, opts.uploaded, opts.token, opts.baseUrl, opts.contextToken, opts.caption);
+    case "video":
+      return sendVideoMessage(opts.to, opts.uploaded, opts.token, opts.baseUrl, opts.contextToken, opts.caption);
+    default:
+      throw new Error(`Unknown media type: ${opts.mediaType}`);
+  }
+}

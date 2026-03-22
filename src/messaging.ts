@@ -10,10 +10,12 @@ import { ACCOUNTS_DIR } from "./paths.js";
 import {
   DEFAULT_BASE_URL,
   sendTextMessage,
+  sendMediaMessage,
   getUpdates,
   loadCursor,
   saveCursor,
 } from "./api.js";
+import { uploadMedia, type MediaType } from "./cdn.js";
 import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
 
 /** Resolve a short/partial userId to a full one from contacts. */
@@ -59,25 +61,104 @@ function formatMsg(msg: Record<string, unknown>): string {
   return `${prefix}${from.slice(0, 20)}: ${parts.join(" ") || "(empty)"}`;
 }
 
+interface SendOptions {
+  to: string;
+  text?: string;
+  image?: string;
+  file?: string;
+  video?: string;
+  caption?: string;
+}
+
+function parseCliSendArgs(args: string[]): SendOptions {
+  const opts: SendOptions = { to: "" };
+  let i = 0;
+  
+  // First arg is always <to>
+  if (args[i] && !args[i].startsWith("--")) {
+    opts.to = args[i++];
+  }
+  
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--image" && args[i + 1]) {
+      opts.image = args[++i];
+    } else if (arg === "--file" && args[i + 1]) {
+      opts.file = args[++i];
+    } else if (arg === "--video" && args[i + 1]) {
+      opts.video = args[++i];
+    } else if (arg === "--caption" && args[i + 1]) {
+      opts.caption = args[++i];
+    } else if (!arg.startsWith("--")) {
+      // Collect remaining as text
+      opts.text = args.slice(i).join(" ");
+      break;
+    }
+    i++;
+  }
+  return opts;
+}
+
 export async function cliSend(args: string[]) {
-  const [to, ...textParts] = args;
-  if (!to || textParts.length === 0) {
-    console.error("Usage: npx weixin-mcp send <userId> <message text>");
+  const opts = parseCliSendArgs(args);
+  
+  if (!opts.to) {
+    console.error(`Usage: npx weixin-mcp send <userId> <text>
+       npx weixin-mcp send <userId> --image <path> [--caption <text>]
+       npx weixin-mcp send <userId> --file <path> [--caption <text>]
+       npx weixin-mcp send <userId> --video <path> [--caption <text>]`);
     process.exit(1);
   }
-  const text = textParts.join(" ");
-  const resolvedTo = resolveUserId(to);
-  if (resolvedTo !== to) console.log(`Resolved "${to}" → ${resolvedTo}`);
+  
+  const resolvedTo = resolveUserId(opts.to);
+  if (resolvedTo !== opts.to) console.log(`Resolved "${opts.to}" → ${resolvedTo}`);
   const { token, baseUrl = DEFAULT_BASE_URL } = loadAccount();
-
-  process.stdout.write(`Sending to ${resolvedTo}... `);
-  const result = await sendTextMessage(resolvedTo, text, token!, baseUrl) as Record<string, unknown>;
-  const ret = result?.ret ?? result?.errcode;
-  if (ret === 0 || ret === undefined) {
+  
+  // Determine what to send
+  const mediaPath = opts.image || opts.file || opts.video;
+  const mediaType: MediaType | null = opts.image ? "image" : opts.file ? "file" : opts.video ? "video" : null;
+  
+  if (mediaPath && mediaType) {
+    // Check file exists
+    if (!fs.existsSync(mediaPath)) {
+      console.error(`File not found: ${mediaPath}`);
+      process.exit(1);
+    }
+    
+    process.stdout.write(`Uploading ${mediaType}... `);
+    const uploaded = await uploadMedia({
+      source: mediaPath,
+      mediaType,
+      toUserId: resolvedTo,
+      token: token!,
+      baseUrl,
+    });
+    console.log("✅");
+    
+    process.stdout.write(`Sending ${mediaType} to ${resolvedTo}... `);
+    await sendMediaMessage({
+      to: resolvedTo,
+      mediaType,
+      uploaded,
+      caption: opts.caption,
+      token: token!,
+      baseUrl,
+    });
     console.log("✅ Sent");
+  } else if (opts.text) {
+    // Text message
+    process.stdout.write(`Sending to ${resolvedTo}... `);
+    const result = await sendTextMessage(resolvedTo, opts.text, token!, baseUrl) as Record<string, unknown>;
+    const ret = result?.ret ?? result?.errcode;
+    if (ret === 0 || ret === undefined) {
+      console.log("✅ Sent");
+    } else {
+      console.log(`❌ Failed (ret=${ret})`);
+      console.log(JSON.stringify(result, null, 2));
+    }
   } else {
-    console.log(`❌ Failed (ret=${ret})`);
-    console.log(JSON.stringify(result, null, 2));
+    console.error("Nothing to send. Provide text or --image/--file/--video");
+    process.exit(1);
   }
 }
 

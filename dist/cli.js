@@ -122,7 +122,10 @@ Commands:
   contacts                     Show contact book (users who messaged the bot)
   update                       Check and install latest version
   --version / -v               Print version
-  send <userId> <text>         Send a message from CLI
+  send <userId> <text>         Send a text message
+  send <userId> --image <path> [--caption <text>]  Send an image
+  send <userId> --file <path> [--caption <text>]   Send a file
+  send <userId> --video <path> [--caption <text>]  Send a video
   poll [--watch|-w] [--reset]  Poll messages once, or watch continuously
   accounts [list]              List all accounts
   accounts remove <id>         Remove an account
