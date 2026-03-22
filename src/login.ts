@@ -46,9 +46,37 @@ async function pollStatus(qrcodeVal: string): Promise<{
   }>;
 }
 
+/** Find existing account file by userId (same WeChat user → same account) */
+function findAccountByUserId(userId: string): string | null {
+  if (!fs.existsSync(ACCOUNTS_DIR)) return null;
+  const files = fs.readdirSync(ACCOUNTS_DIR).filter(
+    (f) => f.endsWith(".json") && !f.includes("sync") && !f.includes("cursor"),
+  );
+  for (const file of files) {
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(ACCOUNTS_DIR, file), "utf-8"));
+      if (data.userId === userId) {
+        return file.replace(".json", "");
+      }
+    } catch {}
+  }
+  return null;
+}
+
 function saveAccount(accountId: string, token: string, baseUrl: string, userId?: string) {
   fs.mkdirSync(ACCOUNTS_DIR, { recursive: true });
-  const filePath = path.join(ACCOUNTS_DIR, `${accountId}.json`);
+  
+  // If userId provided, check for existing account with same userId
+  let finalAccountId = accountId;
+  if (userId) {
+    const existingId = findAccountByUserId(userId);
+    if (existingId && existingId !== accountId) {
+      console.log(`\n🔄 Updating existing account: ${existingId}`);
+      finalAccountId = existingId;
+    }
+  }
+  
+  const filePath = path.join(ACCOUNTS_DIR, `${finalAccountId}.json`);
   const existing = fs.existsSync(filePath)
     ? (JSON.parse(fs.readFileSync(filePath, "utf-8")) as Record<string, unknown>)
     : {};
