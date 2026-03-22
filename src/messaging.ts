@@ -114,6 +114,10 @@ export async function cliSend(args: string[]) {
   if (resolvedTo !== opts.to) console.log(`Resolved "${opts.to}" → ${resolvedTo}`);
   const { token, baseUrl = DEFAULT_BASE_URL } = loadAccount();
   
+  // Get contextToken from contacts (required for sending)
+  const contacts = loadContacts();
+  const contextToken = contacts[resolvedTo]?.contextToken;
+  
   // Determine what to send
   const mediaPath = opts.image || opts.file || opts.video;
   const mediaType: MediaType | null = opts.image ? "image" : opts.file ? "file" : opts.video ? "video" : null;
@@ -143,12 +147,13 @@ export async function cliSend(args: string[]) {
       caption: opts.caption,
       token: token!,
       baseUrl,
+      contextToken,
     });
     console.log("✅ Sent");
   } else if (opts.text) {
     // Text message
     process.stdout.write(`Sending to ${resolvedTo}... `);
-    const result = await sendTextMessage(resolvedTo, opts.text, token!, baseUrl) as Record<string, unknown>;
+    const result = await sendTextMessage(resolvedTo, opts.text, token!, baseUrl, contextToken) as Record<string, unknown>;
     const ret = result?.ret ?? result?.errcode;
     if (ret === 0 || ret === undefined) {
       console.log("✅ Sent");
