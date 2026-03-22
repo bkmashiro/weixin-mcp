@@ -1,11 +1,13 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 
 export const DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com";
-
-const AUTH_ERROR_STATUSES = new Set([401, 403]);
+const CHANNEL_VERSION = "1.0.2";
 
 export class WeixinAuthError extends Error {
-  constructor(message = "Authentication failed. Run npm run login to re-authenticate.") {
+  constructor(message = "Authentication failed. Run: npm run login") {
     super(message);
     this.name = "WeixinAuthError";
   }
@@ -18,21 +20,63 @@ export class WeixinNetworkError extends Error {
   }
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
 export function generateClientId(): string {
-  return `openclaw-weixin-mcp-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  return `weixin-mcp-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 }
 
-async function parseErrorResponse(res: Response): Promise<string> {
+/** X-WECHAT-UIN: base64-encoded random uint32, required by backend */
+function randomWechatUin(): string {
+  const buf = crypto.randomBytes(4);
+  return buf.toString("base64");
+}
+
+function buildHeaders(token: string, bodyStr: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Content-Length": String(Buffer.byteLength(bodyStr, "utf-8")),
+    "AuthorizationType": "ilink_bot_token",
+    "Authorization": `Bearer ${token}`,
+    "X-WECHAT-UIN": randomWechatUin(),
+  };
+}
+
+// ── Cursor persistence ─────────────────────────────────────────────────────
+
+const STATE_DIR =
+  process.env.OPENCLAW_STATE_DIR?.trim() ||
+  path.join(os.homedir(), ".openclaw");
+
+function cursorPath(accountId: string): string {
+  return path.join(STATE_DIR, "openclaw-weixin", "accounts", `${accountId}.cursor.json`);
+}
+
+export function loadCursor(accountId: string): string {
   try {
-    const text = await res.text();
-    return text.trim() || `HTTP ${res.status}`;
+    const data = JSON.parse(fs.readFileSync(cursorPath(accountId), "utf-8")) as { cursor?: string };
+    return data.cursor ?? "";
   } catch {
-    return `HTTP ${res.status}`;
+    return "";
   }
 }
 
-function isTransientNetworkError(error: unknown): boolean {
-  return error instanceof TypeError || error instanceof WeixinNetworkError;
+export function saveCursor(accountId: string, cursor: string): void {
+  try {
+    fs.writeFileSync(cursorPath(accountId), JSON.stringify({ cursor }));
+  } catch {
+    // non-fatal
+  }
+}
+
+// ── Core request ───────────────────────────────────────────────────────────
+
+async function parseErrorResponse(res: Response): Promise<string> {
+  try {
+    return (await res.text()).trim() || `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
 }
 
 export async function weixinRequest(
@@ -50,49 +94,39 @@ export async function weixinRequest(
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": String(Buffer.byteLength(bodyStr, "utf-8")),
-          "AuthorizationType": "ilink_bot_token",
-          "Authorization": `Bearer ${token}`,
-        },
+        headers: buildHeaders(token, bodyStr),
         body: bodyStr,
       });
 
-      if (AUTH_ERROR_STATUSES.has(res.status)) {
-        throw new WeixinAuthError();
-      }
-
+      if (res.status === 401 || res.status === 403) throw new WeixinAuthError();
       if (!res.ok) {
-        const message = await parseErrorResponse(res);
-        throw new Error(`Weixin API error ${res.status}: ${message}`);
+        const msg = await parseErrorResponse(res);
+        throw new Error(`Weixin API error ${res.status}: ${msg}`);
       }
-
       return res.json();
-    } catch (error) {
-      if (error instanceof WeixinAuthError) {
-        throw error;
-      }
-
-      if (isTransientNetworkError(error) && attempt < retries) {
-        continue;
-      }
-
-      if (isTransientNetworkError(error)) {
-        throw new WeixinNetworkError(
-          error instanceof Error ? error.message : "Network request failed",
-        );
-      }
-
-      throw error;
+    } catch (err) {
+      if (err instanceof WeixinAuthError) throw err;
+      if (err instanceof TypeError && attempt < retries) continue; // network retry
+      if (err instanceof TypeError) throw new WeixinNetworkError(String(err));
+      throw err;
     }
   }
-
-  throw new WeixinNetworkError("Network request failed");
+  throw new WeixinNetworkError("Network request failed after retries");
 }
 
-/** Send a text message. Uses real endpoint: ilink/bot/sendmessage */
-export async function sendTextMessage(to: string, text: string, token: string, baseUrl: string) {
+// ── API functions ──────────────────────────────────────────────────────────
+
+/**
+ * Send a text message.
+ * Pass contextToken from the received message to link the reply to the conversation.
+ */
+export async function sendTextMessage(
+  to: string,
+  text: string,
+  token: string,
+  baseUrl: string,
+  contextToken?: string,
+) {
   return weixinRequest(
     "ilink/bot/sendmessage",
     {
@@ -100,46 +134,74 @@ export async function sendTextMessage(to: string, text: string, token: string, b
         from_user_id: "",
         to_user_id: to,
         client_id: generateClientId(),
-        message_type: 2,   // BOT
-        message_state: 2,  // FINISH
+        message_type: 2,  // BOT
+        message_state: 2, // FINISH
         item_list: [{ type: 1, text_item: { text } }],
+        ...(contextToken ? { context_token: contextToken } : {}),
       },
-      base_info: { channel_version: "1.0.1" },
+      base_info: { channel_version: CHANNEL_VERSION },
     },
     token,
     baseUrl,
   );
 }
 
-/** Long-poll for new messages. Uses real endpoint: ilink/bot/getupdates */
-export async function pollMessages(token: string, baseUrl: string, timeoutMs = 5000) {
+/**
+ * Long-poll for new messages.
+ * Pass the cursor from the previous response to avoid re-receiving old messages.
+ */
+export async function getUpdates(
+  token: string,
+  baseUrl: string,
+  cursor = "",
+): Promise<{ msgs?: unknown[]; get_updates_buf?: string; ret?: number; errcode?: number }> {
   return weixinRequest(
     "ilink/bot/getupdates",
     {
-      timeout_ms: timeoutMs,
-      base_info: { channel_version: "1.0.1" },
+      get_updates_buf: cursor,
+      base_info: { channel_version: CHANNEL_VERSION },
     },
     token,
     baseUrl,
-  );
+  ) as Promise<{ msgs?: unknown[]; get_updates_buf?: string; ret?: number; errcode?: number }>;
 }
 
-/** Get bot config for a user (includes context_token for replies). */
-export async function getConfig(ilinkUserId: string, token: string, baseUrl: string) {
+/**
+ * Get bot config for a user (includes typing_ticket and context_token).
+ */
+export async function getConfig(ilinkUserId: string, token: string, baseUrl: string, contextToken?: string) {
   return weixinRequest(
     "ilink/bot/getconfig",
     {
       ilink_user_id: ilinkUserId,
-      base_info: { channel_version: "1.0.1" },
+      ...(contextToken ? { context_token: contextToken } : {}),
+      base_info: { channel_version: CHANNEL_VERSION },
     },
     token,
     baseUrl,
   );
 }
 
-// Note: WeChat bot API does not have a standalone contacts/history endpoint.
-// Contacts are tracked from incoming messages (getupdates).
-// Keeping a stub for MCP compatibility:
-export async function getContacts(_token: string, _baseUrl: string) {
-  return { note: "WeChat bot API does not support listing contacts. Use weixin_poll_messages to receive incoming messages and track senders." };
+/**
+ * Send typing indicator.
+ * status: 1 = typing, 2 = cancel
+ */
+export async function sendTyping(
+  ilinkUserId: string,
+  typingTicket: string,
+  status: 1 | 2,
+  token: string,
+  baseUrl: string,
+) {
+  return weixinRequest(
+    "ilink/bot/sendtyping",
+    {
+      ilink_user_id: ilinkUserId,
+      typing_ticket: typingTicket,
+      status,
+      base_info: { channel_version: CHANNEL_VERSION },
+    },
+    token,
+    baseUrl,
+  );
 }

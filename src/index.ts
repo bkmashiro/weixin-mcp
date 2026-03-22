@@ -15,10 +15,11 @@ import path from "node:path";
 import os from "node:os";
 import {
   DEFAULT_BASE_URL,
-  
-  getContacts,
-  pollMessages,
+  getUpdates,
+  getConfig,
   sendTextMessage,
+  loadCursor,
+  saveCursor,
   WeixinAuthError,
   WeixinNetworkError,
 } from "./api.js";
@@ -40,18 +41,22 @@ interface AccountData {
 }
 
 function loadAccount(): AccountData & { accountId: string } {
-  const files = fs.readdirSync(WEIXIN_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json"));
-  if (files.length === 0) throw new Error("No WeChat account found. Run: npx @tencent-weixin/openclaw-weixin-cli install");
+  const files = fs
+    .readdirSync(WEIXIN_DIR)
+    .filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
+  if (files.length === 0)
+    throw new Error("No WeChat account found. Run: npm run login");
 
-  // Pick the first (or explicitly set) account
-  const accountId = process.env.WEIXIN_ACCOUNT_ID ?? files[0].replace(".json", "");
+  const accountId =
+    process.env.WEIXIN_ACCOUNT_ID ?? files[0].replace(".json", "");
   const filePath = path.join(WEIXIN_DIR, `${accountId}.json`);
   const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as AccountData;
-  if (!data.token) throw new Error(`No token for account ${accountId}. Re-run QR login.`);
+  if (!data.token)
+    throw new Error(`No token for account ${accountId}. Re-run: npm run login`);
   return { ...data, accountId };
 }
 
-// ── Weixin API ─────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function assertNonEmptyString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "") {
@@ -61,25 +66,17 @@ function assertNonEmptyString(value: unknown, field: string): string {
 }
 
 function formatToolError(error: unknown): string {
-  if (error instanceof WeixinAuthError) {
-    return error.message;
-  }
-
-  if (error instanceof WeixinNetworkError) {
-    return `Network error while calling Weixin API: ${error.message}`;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
+  if (error instanceof WeixinAuthError) return error.message;
+  if (error instanceof WeixinNetworkError)
+    return `Network error: ${error.message}`;
+  if (error instanceof Error) return error.message;
   return String(error);
 }
 
 // ── MCP Server ─────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: "weixin-mcp", version: "1.0.0" },
+  { name: "weixin-mcp", version: "1.0.2" },
   { capabilities: { tools: {} } },
 );
 
@@ -87,41 +84,48 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "weixin_send",
-      description: "Send a WeChat message to a user (by user ID or OpenId)",
+      description:
+        "Send a WeChat text message to a user. Pass context_token from a received message to link the reply to the conversation thread.",
       inputSchema: {
         type: "object",
         properties: {
           to: { type: "string", description: "Recipient user ID / OpenId" },
           text: { type: "string", description: "Message text to send" },
+          context_token: {
+            type: "string",
+            description:
+              "Optional: context_token from a received message, links the reply to the conversation",
+          },
         },
         required: ["to", "text"],
       },
     },
     {
-      name: "weixin_get_contacts",
-      description: "List WeChat contacts",
-      inputSchema: { type: "object", properties: {} },
-    },
-    {
-      name: "weixin_poll_messages",
-      description: "Poll for new WeChat messages since a timestamp",
+      name: "weixin_poll",
+      description:
+        "Poll for new WeChat messages. Uses a persistent cursor to avoid re-delivering old messages. Returns new messages since last poll.",
       inputSchema: {
         type: "object",
         properties: {
-          since_ts: { type: "number", description: "Unix timestamp in ms (optional)" },
+          reset_cursor: {
+            type: "boolean",
+            description:
+              "If true, reset cursor and re-fetch from the beginning (useful for debugging)",
+          },
         },
       },
     },
     {
-      name: "weixin_get_history",
-      description: "Get chat history with a WeChat contact",
+      name: "weixin_get_config",
+      description:
+        "Get bot config for a user — includes typing_ticket needed for sendTyping. Call before sending typing indicators.",
       inputSchema: {
         type: "object",
         properties: {
-          to: { type: "string", description: "Contact user ID / OpenId" },
-          limit: { type: "number", description: "Number of messages (default 20)" },
+          user_id: { type: "string", description: "Target user ID / OpenId" },
+          context_token: { type: "string", description: "Optional context token" },
         },
-        required: ["to"],
+        required: ["user_id"],
       },
     },
   ],
@@ -129,7 +133,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const account = loadAccount();
-  const { token, baseUrl = DEFAULT_BASE_URL } = account;
+  const { token, baseUrl = DEFAULT_BASE_URL, accountId } = account;
 
   const { name, arguments: args } = req.params;
 
@@ -137,18 +141,34 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     let result: unknown;
 
     if (name === "weixin_send") {
-      const { to, text } = (args ?? {}) as { to?: string; text?: string };
+      const { to, text, context_token } = (args ?? {}) as {
+        to?: string;
+        text?: string;
+        context_token?: string;
+      };
       const validatedTo = assertNonEmptyString(to, "to");
       const validatedText = assertNonEmptyString(text, "text");
-      result = await sendTextMessage(validatedTo, validatedText, token!, baseUrl);
-    } else if (name === "weixin_get_contacts") {
-      result = await getContacts(token!, baseUrl);
-    } else if (name === "weixin_poll_messages") {
-      const { since_ts } = (args ?? {}) as { since_ts?: number };
-      result = await pollMessages(token!, baseUrl, since_ts);
-    } else if (name === "weixin_get_history") {
-      const { to, limit = 20 } = (args ?? {}) as { to?: string; limit?: number };
-      result = { note: "WeChat bot API does not support fetching chat history." };
+      result = await sendTextMessage(
+        validatedTo,
+        validatedText,
+        token!,
+        baseUrl,
+        context_token,
+      );
+    } else if (name === "weixin_poll") {
+      const { reset_cursor } = (args ?? {}) as { reset_cursor?: boolean };
+      const cursor = reset_cursor ? "" : loadCursor(accountId);
+      const resp = await getUpdates(token!, baseUrl, cursor);
+      // Persist new cursor for next poll
+      if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
+      result = resp;
+    } else if (name === "weixin_get_config") {
+      const { user_id, context_token } = (args ?? {}) as {
+        user_id?: string;
+        context_token?: string;
+      };
+      const validatedUserId = assertNonEmptyString(user_id, "user_id");
+      result = await getConfig(validatedUserId, token!, baseUrl, context_token);
     } else {
       throw new Error(`Unknown tool: ${name}`);
     }
