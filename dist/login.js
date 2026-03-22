@@ -19,14 +19,16 @@ const STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() ||
     path.join(os.homedir(), ".openclaw");
 const ACCOUNTS_DIR = path.join(STATE_DIR, "openclaw-weixin", "accounts");
 async function fetchQRCode() {
-    const url = `${BASE_URL}/ilink/bot/get_bot_qrcode?bot_type=${BOT_TYPE}`;
+    const base = BASE_URL.endsWith("/") ? BASE_URL : `${BASE_URL}/`;
+    const url = `${base}ilink/bot/get_bot_qrcode?bot_type=${BOT_TYPE}`;
     const res = await fetch(url);
     if (!res.ok)
         throw new Error(`QR fetch failed: ${res.status}`);
     return res.json();
 }
 async function pollStatus(qrcodeVal) {
-    const url = `${BASE_URL}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcodeVal)}`;
+    const base = BASE_URL.endsWith("/") ? BASE_URL : `${BASE_URL}/`;
+    const url = `${base}ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcodeVal)}`;
     const res = await fetch(url, {
         headers: { "iLink-App-ClientVersion": "1" },
     });
@@ -52,17 +54,21 @@ function saveAccount(accountId, token, baseUrl, userId) {
 async function main() {
     console.log("🔐 WeChat MCP — QR Login\n");
     console.log("Fetching QR code...");
-    const { qrcode: qrcodeVal } = await fetchQRCode();
-    // Render QR in terminal
+    const { qrcode: qrcodeToken, qrcode_img_content: qrcodeUrl } = await fetchQRCode();
+    // qrcode_img_content is the WeChat URL to scan
+    // qrcode is just the token used for polling status — do NOT render this as QR
     console.log("\nScan this QR code with WeChat:\n");
-    qrcode.generate(qrcodeVal, { small: true });
+    qrcode.generate(qrcodeUrl, { small: true });
     console.log("\nWaiting for scan...");
-    // Poll until confirmed or expired
+    // Poll using qrcodeToken (not the URL)
     let attempts = 0;
-    while (attempts < 60) {
+    let qrRefreshCount = 0;
+    let currentQrcodeToken = qrcodeToken;
+    let currentQrcodeUrl = qrcodeUrl;
+    while (attempts < 90) {
         await new Promise((r) => setTimeout(r, 2000));
         attempts++;
-        const status = await pollStatus(qrcodeVal);
+        const status = await pollStatus(currentQrcodeToken);
         if (status.status === "scaned") {
             process.stdout.write("\r✓ Scanned! Waiting for confirmation...");
         }
@@ -83,8 +89,17 @@ async function main() {
             process.exit(0);
         }
         else if (status.status === "expired") {
-            console.error("\n❌ QR code expired. Please run again.");
-            process.exit(1);
+            qrRefreshCount++;
+            if (qrRefreshCount > 3) {
+                console.error("\n❌ QR code expired 3 times. Please run again.");
+                process.exit(1);
+            }
+            console.log(`\n⏳ QR code expired, refreshing... (${qrRefreshCount}/3)`);
+            const refreshed = await fetchQRCode();
+            currentQrcodeToken = refreshed.qrcode;
+            currentQrcodeUrl = refreshed.qrcode_img_content;
+            console.log("\nNew QR code — scan with WeChat:\n");
+            qrcode.generate(currentQrcodeUrl, { small: true });
         }
     }
     console.error("\n❌ Timeout waiting for scan.");
