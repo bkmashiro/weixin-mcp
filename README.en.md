@@ -1,28 +1,54 @@
 # weixin-mcp
 
-Standalone MCP server for WeChat — expose WeChat messaging as MCP tools for Claude Desktop and other MCP clients.
+MCP server for WeChat messaging — expose WeChat capabilities as MCP tools for Claude Desktop, Cursor, and other MCP clients.
 
-Reuses the token from [OpenClaw weixin plugin](https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin) if already installed, or supports independent QR login.
+[中文](./README.md)
 
 ## Quick Start
 
-### Step 1 — Login (first time only)
-
 ```bash
-npx weixin-login
+# 1. Login (scan QR code)
+npx weixin-mcp login
+
+# 2. Check status
+npx weixin-mcp status
+
+# 3. Start MCP server (stdio mode for Claude Desktop)
+npx weixin-mcp
 ```
 
-A QR code will appear in your terminal. Scan it with WeChat and confirm. Token is saved locally.
+## CLI Commands
 
-### Step 2 — Start the MCP server
+| Command | Description |
+|---------|-------------|
+| `npx weixin-mcp login` | QR code login |
+| `npx weixin-mcp status` | Show account and daemon status |
+| `npx weixin-mcp` | Start stdio MCP server (Claude Desktop) |
+| `npx weixin-mcp start [--port n]` | Start HTTP daemon (background, default 3001) |
+| `npx weixin-mcp stop` | Stop daemon |
+| `npx weixin-mcp restart` | Restart daemon |
+| `npx weixin-mcp logs [-f]` | View daemon logs (-f for follow) |
+| `npx weixin-mcp send <userId> <text>` | Send message (supports short ID prefix) |
+| `npx weixin-mcp poll [--watch] [--reset]` | Poll messages (--watch for continuous) |
+| `npx weixin-mcp contacts` | List contacts (users who messaged the bot) |
+| `npx weixin-mcp accounts [list]` | List all accounts |
+| `npx weixin-mcp accounts remove <id>` | Remove an account |
+| `npx weixin-mcp accounts clean` | Remove duplicates (keep newest per userId) |
+| `npx weixin-mcp update` | Check and install latest version |
+| `npx weixin-mcp --version` | Print version |
+
+### Short ID Matching
+
+When sending messages, you can use a prefix of the user ID if it uniquely matches a contact:
 
 ```bash
-npx weixin-mcp
+npx weixin-mcp send o9cq8 "hello"
+# Resolved "o9cq8" → o9cq80x8ou646cs3Tt5EQgfsZRtI@im.wechat
 ```
 
 ## Claude Desktop Integration
 
-Add to your `claude_desktop_config.json`:
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -35,34 +61,46 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop. You can now ask Claude to send WeChat messages or poll for new ones.
+## HTTP Daemon Mode
 
-## Tools
+Start an HTTP daemon for multi-client connections:
+
+```bash
+npx weixin-mcp start --port 3001
+```
+
+- MCP endpoint: `http://localhost:3001/mcp` (StreamableHTTP)
+- Health check: `http://localhost:3001/health`
+
+## MCP Tools
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `weixin_send` | Send a text message | `to` (user ID), `text`, `context_token` (optional — link reply to a conversation) |
-| `weixin_poll` | Poll for new messages (cursor-based, no duplicates) | `reset_cursor` (optional boolean) |
-| `weixin_get_config` | Get user config (typing ticket, etc.) | `user_id`, `context_token` (optional) |
+| `weixin_send` | Send text message | `to`, `text`, `context_token` (optional) |
+| `weixin_poll` | Poll new messages | `reset_cursor` (optional) |
+| `weixin_contacts` | List contacts | none |
+| `weixin_get_config` | Get user config | `user_id`, `context_token` (optional) |
 
-## Already using OpenClaw weixin plugin?
+## Data Storage
 
-If you've already logged in via OpenClaw, no login needed — `npx weixin-mcp` will pick up the existing token automatically.
+Priority:
+1. `WEIXIN_MCP_DIR` environment variable
+2. `~/.openclaw/openclaw-weixin/` (if OpenClaw installed)
+3. `~/.weixin-mcp/` (default)
+
+Files:
+- `accounts/<accountId>.json` — account token
+- `accounts/<accountId>.cursor.json` — message cursor
+- `contacts.json` — contact book
+- `daemon.json` — daemon PID (HTTP mode only)
+- `daemon.log` — daemon logs
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENCLAW_STATE_DIR` | `~/.openclaw` | State directory; accounts are read from `$OPENCLAW_STATE_DIR/openclaw-weixin/accounts/` |
-| `WEIXIN_ACCOUNT_ID` | first account found | Specify which account to use (filename without `.json`) |
-
-## Re-login
-
-If your token expires:
-
-```bash
-npx weixin-login
-```
+| Variable | Description |
+|----------|-------------|
+| `WEIXIN_MCP_DIR` | Custom data directory |
+| `WEIXIN_ACCOUNT_ID` | Specify which account to use |
 
 ## License
 

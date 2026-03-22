@@ -11,6 +11,16 @@ import path from "node:path";
 import { DEFAULT_BASE_URL, getUpdates, getConfig, sendTextMessage, loadCursor, saveCursor, WeixinAuthError, WeixinNetworkError, } from "./api.js";
 import { ACCOUNTS_DIR } from "./paths.js";
 import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
+/** Resolve short userId prefix to full ID from contacts. */
+function resolveUserId(input, contacts) {
+    if (!input || input.includes("@"))
+        return input;
+    const ids = Object.keys(contacts);
+    const matches = ids.filter((id) => id.startsWith(input) || id.includes(input));
+    if (matches.length === 1)
+        return matches[0];
+    return input; // ambiguous or not found — use as-is
+}
 // ── Auth / config ──────────────────────────────────────────────────────────
 const WEIXIN_DIR = ACCOUNTS_DIR;
 function loadAccount() {
@@ -52,7 +62,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             inputSchema: {
                 type: "object",
                 properties: {
-                    to: { type: "string", description: "Recipient user ID / OpenId" },
+                    to: { type: "string", description: "Recipient user ID (full or short prefix if unique in contacts)" },
                     text: { type: "string", description: "Message text to send" },
                     context_token: {
                         type: "string",
@@ -103,8 +113,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (name === "weixin_send") {
             const { to, text, context_token } = (args ?? {});
             const validatedTo = assertNonEmptyString(to, "to");
+            const resolvedTo = resolveUserId(validatedTo, loadContacts());
             const validatedText = assertNonEmptyString(text, "text");
-            result = await sendTextMessage(validatedTo, validatedText, token, baseUrl, context_token);
+            result = await sendTextMessage(resolvedTo, validatedText, token, baseUrl, context_token);
         }
         else if (name === "weixin_poll") {
             const { reset_cursor } = (args ?? {});

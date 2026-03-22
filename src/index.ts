@@ -23,7 +23,16 @@ import {
   WeixinNetworkError,
 } from "./api.js";
 import { ACCOUNTS_DIR } from "./paths.js";
-import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
+import { updateContactsFromMsgs, loadContacts, type ContactBook } from "./contacts.js";
+
+/** Resolve short userId prefix to full ID from contacts. */
+function resolveUserId(input: string, contacts: ContactBook): string {
+  if (!input || input.includes("@")) return input;
+  const ids = Object.keys(contacts);
+  const matches = ids.filter((id) => id.startsWith(input) || id.includes(input));
+  if (matches.length === 1) return matches[0];
+  return input; // ambiguous or not found — use as-is
+}
 
 // ── Auth / config ──────────────────────────────────────────────────────────
 
@@ -85,7 +94,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          to: { type: "string", description: "Recipient user ID / OpenId" },
+          to: { type: "string", description: "Recipient user ID (full or short prefix if unique in contacts)" },
           text: { type: "string", description: "Message text to send" },
           context_token: {
             type: "string",
@@ -149,9 +158,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         context_token?: string;
       };
       const validatedTo = assertNonEmptyString(to, "to");
+      const resolvedTo = resolveUserId(validatedTo, loadContacts());
       const validatedText = assertNonEmptyString(text, "text");
       result = await sendTextMessage(
-        validatedTo,
+        resolvedTo,
         validatedText,
         token!,
         baseUrl,
