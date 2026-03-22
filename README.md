@@ -7,7 +7,7 @@
 
 > ⚠️ **重要说明**：本项目基于微信官方 **ClawBot**（智能体机器人）API，需要在微信中创建 ClawBot 后扫码登录。**不是用个人微信账号发消息**，而是通过官方机器人接口。
 >
-> 👉 创建 ClawBot：微信 → 发现 → 小程序 → 搜索「ClawBot」
+> 👉 创建 ClawBot：最新版微信 → 设置 → 插件 → 微信 ClawBot
 
 将微信 ClawBot 能力暴露为 [MCP](https://modelcontextprotocol.io/) 工具，Claude Desktop、Cursor、OpenClaw 等 AI 助手可以直接：
 

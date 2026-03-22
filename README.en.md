@@ -7,7 +7,7 @@
 
 > ⚠️ **Important**: This project uses the official WeChat **ClawBot** (AI agent bot) API. You need to create a ClawBot in WeChat and scan to login. **This does NOT use your personal WeChat account** — it uses the official bot interface.
 >
-> 👉 Create ClawBot: WeChat → Discover → Mini Programs → Search "ClawBot"
+> 👉 Create ClawBot: Latest WeChat → Settings → Plugins → WeChat ClawBot
 
 Expose WeChat ClawBot capabilities as [MCP](https://modelcontextprotocol.io/) tools. Claude Desktop, Cursor, OpenClaw, and other AI assistants can directly:
 
