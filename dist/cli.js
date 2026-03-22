@@ -74,6 +74,24 @@ else if (command === "update") {
         console.log("✅ Updated! Run: npx weixin-mcp --version");
     }
 }
+else if (command === "contacts") {
+    const { loadContacts } = await import("./contacts.js");
+    const contacts = Object.values(loadContacts());
+    if (contacts.length === 0) {
+        console.log("No contacts yet. Run: npx weixin-mcp poll --reset");
+    }
+    else {
+        console.log(`Contacts (${contacts.length}):\n`);
+        for (const c of contacts) {
+            console.log(`  ${c.userId}`);
+            console.log(`    Last:  ${c.lastText ?? "(no text)"}`);
+            console.log(`    Seen:  ${new Date(c.lastSeen).toLocaleString()}`);
+            console.log(`    Msgs:  ${c.msgCount}`);
+            if (c.contextToken)
+                console.log(`    Token: ${c.contextToken.slice(0, 20)}...`);
+        }
+    }
+}
 else if (command === "send") {
     const { cliSend } = await import("./messaging.js");
     await cliSend(process.argv.slice(3)); // <userId> <text...>
@@ -99,6 +117,7 @@ Commands:
   stop                         Stop daemon
   restart                      Restart daemon
   logs [-f]                    Show daemon logs (-f to follow)
+  contacts                     Show contact book (users who messaged the bot)
   update                       Check and install latest version
   --version / -v               Print version
   send <userId> <text>         Send a message from CLI
