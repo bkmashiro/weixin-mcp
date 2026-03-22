@@ -1,23 +1,18 @@
 #!/usr/bin/env node
 /**
- * weixin-login — standalone QR login for weixin-mcp
- * Usage: node dist/login.js
+ * weixin-login — QR login for weixin-mcp
+ * Usage: npx weixin-mcp login
  *
- * Fetches a QR code from Weixin API, renders it in terminal,
- * polls for scan confirmation, then saves token to:
- *   ~/.openclaw/openclaw-weixin/accounts/<accountId>.json
+ * Token saved to: ~/.weixin-mcp/accounts/ (or ~/.openclaw/openclaw-weixin/accounts/ if OpenClaw is installed)
  */
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import crypto from "node:crypto";
 // @ts-ignore — no types for qrcode-terminal
 import qrcode from "qrcode-terminal";
+import { ACCOUNTS_DIR } from "./paths.js";
 const BASE_URL = "https://ilinkai.weixin.qq.com";
 const BOT_TYPE = "3";
-const STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".openclaw");
-const ACCOUNTS_DIR = path.join(STATE_DIR, "openclaw-weixin", "accounts");
 async function fetchQRCode() {
     const base = BASE_URL.endsWith("/") ? BASE_URL : `${BASE_URL}/`;
     const url = `${base}ilink/bot/get_bot_qrcode?bot_type=${BOT_TYPE}`;

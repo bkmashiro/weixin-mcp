@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 /**
- * weixin-login — standalone QR login for weixin-mcp
- * Usage: node dist/login.js
+ * weixin-login — QR login for weixin-mcp
+ * Usage: npx weixin-mcp login
  *
- * Fetches a QR code from Weixin API, renders it in terminal,
- * polls for scan confirmation, then saves token to:
- *   ~/.openclaw/openclaw-weixin/accounts/<accountId>.json
+ * Token saved to: ~/.weixin-mcp/accounts/ (or ~/.openclaw/openclaw-weixin/accounts/ if OpenClaw is installed)
  */
 export declare function main(): Promise<void>;

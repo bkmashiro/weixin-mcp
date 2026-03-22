@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 export const DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com";
 const CHANNEL_VERSION = "1.0.2";
 export class WeixinAuthError extends Error {
@@ -35,10 +34,9 @@ function buildHeaders(token, bodyStr) {
     };
 }
 // ── Cursor persistence ─────────────────────────────────────────────────────
-const STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".openclaw");
+import { ACCOUNTS_DIR } from "./paths.js";
 function cursorPath(accountId) {
-    return path.join(STATE_DIR, "openclaw-weixin", "accounts", `${accountId}.cursor.json`);
+    return path.join(ACCOUNTS_DIR, `${accountId}.cursor.json`);
 }
 export function loadCursor(accountId) {
     try {

@@ -12,7 +12,6 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import {
   DEFAULT_BASE_URL,
   getUpdates,
@@ -23,15 +22,11 @@ import {
   WeixinAuthError,
   WeixinNetworkError,
 } from "./api.js";
+import { ACCOUNTS_DIR } from "./paths.js";
 
 // ── Auth / config ──────────────────────────────────────────────────────────
 
-const STATE_DIR =
-  process.env.OPENCLAW_STATE_DIR?.trim() ||
-  process.env.CLAWDBOT_STATE_DIR?.trim() ||
-  path.join(os.homedir(), ".openclaw");
-
-const WEIXIN_DIR = path.join(STATE_DIR, "openclaw-weixin", "accounts");
+const WEIXIN_DIR = ACCOUNTS_DIR;
 
 interface AccountData {
   token?: string;

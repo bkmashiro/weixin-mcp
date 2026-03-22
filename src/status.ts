@@ -1,12 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
-
-const STATE_DIR =
-  process.env.OPENCLAW_STATE_DIR?.trim() ||
-  path.join(os.homedir(), ".openclaw");
-
-const ACCOUNTS_DIR = path.join(STATE_DIR, "openclaw-weixin", "accounts");
+import { ACCOUNTS_DIR } from "./paths.js";
 
 export async function showStatus() {
   console.log("🔍 weixin-mcp status\n");
