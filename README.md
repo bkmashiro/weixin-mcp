@@ -44,8 +44,8 @@ npx weixin-mcp
 发送消息时可以用用户 ID 的前缀，只要在联系人中唯一匹配即可：
 
 ```bash
-npx weixin-mcp send o9cq8 "hello"
-# Resolved "o9cq8" → o9cq80x8ou646cs3Tt5EQgfsZRtI@im.wechat
+npx weixin-mcp send abc12 "hello"
+# Resolved "abc12" → abc123xyz456@im.wechat
 ```
 
 ## Claude Desktop 集成

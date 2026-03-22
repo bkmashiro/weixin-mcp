@@ -17,11 +17,14 @@ import {
   getUpdates,
   getConfig,
   sendTextMessage,
+  sendImageMessage,
+  sendFileMessage,
   loadCursor,
   saveCursor,
   WeixinAuthError,
   WeixinNetworkError,
 } from "./api.js";
+import { uploadMedia } from "./cdn.js";
 import { ACCOUNTS_DIR } from "./paths.js";
 import { updateContactsFromMsgs, loadContacts, type ContactBook } from "./contacts.js";
 
@@ -127,6 +130,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: "object", properties: {} },
     },
     {
+      name: "weixin_send_image",
+      description:
+        "Send an image to a WeChat user. Source can be a local file path or URL. Optionally include a text caption.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient user ID (full or short prefix)" },
+          source: { type: "string", description: "Image source: local file path or URL" },
+          caption: { type: "string", description: "Optional text caption to send with the image" },
+          context_token: { type: "string", description: "Optional context_token to link reply" },
+        },
+        required: ["to", "source"],
+      },
+    },
+    {
+      name: "weixin_send_file",
+      description:
+        "Send a file attachment to a WeChat user. Source can be a local file path or URL.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient user ID (full or short prefix)" },
+          source: { type: "string", description: "File source: local file path or URL" },
+          caption: { type: "string", description: "Optional text caption to send with the file" },
+          context_token: { type: "string", description: "Optional context_token to link reply" },
+        },
+        required: ["to", "source"],
+      },
+    },
+    {
       name: "weixin_get_config",
       description:
         "Get bot config for a user — includes typing_ticket needed for sendTyping. Call before sending typing indicators.",
@@ -177,6 +210,44 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       result = resp;
     } else if (name === "weixin_contacts") {
       result = Object.values(loadContacts());
+    } else if (name === "weixin_send_image") {
+      const { to, source, caption, context_token } = (args ?? {}) as {
+        to?: string;
+        source?: string;
+        caption?: string;
+        context_token?: string;
+      };
+      const validatedTo = assertNonEmptyString(to, "to");
+      const resolvedTo = resolveUserId(validatedTo, loadContacts());
+      const validatedSource = assertNonEmptyString(source, "source");
+      const uploaded = await uploadMedia({
+        source: validatedSource,
+        mediaType: "image",
+        toUserId: resolvedTo,
+        token: token!,
+        baseUrl,
+      });
+      await sendImageMessage(resolvedTo, uploaded, token!, baseUrl, context_token, caption);
+      result = { success: true, filekey: uploaded.filekey };
+    } else if (name === "weixin_send_file") {
+      const { to, source, caption, context_token } = (args ?? {}) as {
+        to?: string;
+        source?: string;
+        caption?: string;
+        context_token?: string;
+      };
+      const validatedTo = assertNonEmptyString(to, "to");
+      const resolvedTo = resolveUserId(validatedTo, loadContacts());
+      const validatedSource = assertNonEmptyString(source, "source");
+      const uploaded = await uploadMedia({
+        source: validatedSource,
+        mediaType: "file",
+        toUserId: resolvedTo,
+        token: token!,
+        baseUrl,
+      });
+      await sendFileMessage(resolvedTo, uploaded, token!, baseUrl, context_token, caption);
+      result = { success: true, filekey: uploaded.filekey, fileName: uploaded.fileName };
     } else if (name === "weixin_get_config") {
       const { user_id, context_token } = (args ?? {}) as {
         user_id?: string;

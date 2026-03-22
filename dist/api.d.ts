@@ -33,3 +33,23 @@ export declare function getConfig(ilinkUserId: string, token: string, baseUrl: s
  * status: 1 = typing, 2 = cancel
  */
 export declare function sendTyping(ilinkUserId: string, typingTicket: string, status: 1 | 2, token: string, baseUrl: string): Promise<unknown>;
+export interface UploadedMedia {
+    filekey: string;
+    downloadEncryptedQueryParam: string;
+    aeskey: string;
+    fileSize: number;
+    fileSizeCiphertext: number;
+    fileName?: string;
+}
+/**
+ * Send an image message using a previously uploaded file.
+ */
+export declare function sendImageMessage(to: string, uploaded: UploadedMedia, token: string, baseUrl: string, contextToken?: string, caption?: string): Promise<void>;
+/**
+ * Send a file attachment using a previously uploaded file.
+ */
+export declare function sendFileMessage(to: string, uploaded: UploadedMedia, token: string, baseUrl: string, contextToken?: string, caption?: string): Promise<void>;
+/**
+ * Send a video message using a previously uploaded file.
+ */
+export declare function sendVideoMessage(to: string, uploaded: UploadedMedia, token: string, baseUrl: string, contextToken?: string, caption?: string): Promise<void>;

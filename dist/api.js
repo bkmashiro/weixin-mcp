@@ -146,3 +146,106 @@ export async function sendTyping(ilinkUserId, typingTicket, status, token, baseU
         base_info: { channel_version: CHANNEL_VERSION },
     }, token, baseUrl);
 }
+/**
+ * Send an image message using a previously uploaded file.
+ */
+export async function sendImageMessage(to, uploaded, token, baseUrl, contextToken, caption) {
+    const items = [];
+    if (caption)
+        items.push({ type: 1, text_item: { text: caption } });
+    items.push({
+        type: 2,
+        image_item: {
+            media: {
+                encrypt_query_param: uploaded.downloadEncryptedQueryParam,
+                // Official SDK does Buffer.from(hexString).toString("base64") — hex as UTF-8 string
+                aes_key: Buffer.from(uploaded.aeskey).toString("base64"),
+                encrypt_type: 1,
+            },
+            aeskey: uploaded.aeskey, // hex string for client decryption
+            mid_size: uploaded.fileSizeCiphertext,
+        },
+    });
+    // Send each item separately (text caption + image)
+    for (const item of items) {
+        await weixinRequest("ilink/bot/sendmessage", {
+            msg: {
+                from_user_id: "",
+                to_user_id: to,
+                client_id: generateClientId(),
+                message_type: 2,
+                message_state: 2,
+                item_list: [item],
+                ...(contextToken ? { context_token: contextToken } : {}),
+            },
+            base_info: { channel_version: CHANNEL_VERSION },
+        }, token, baseUrl);
+    }
+}
+/**
+ * Send a file attachment using a previously uploaded file.
+ */
+export async function sendFileMessage(to, uploaded, token, baseUrl, contextToken, caption) {
+    const items = [];
+    if (caption)
+        items.push({ type: 1, text_item: { text: caption } });
+    items.push({
+        type: 4,
+        file_item: {
+            media: {
+                encrypt_query_param: uploaded.downloadEncryptedQueryParam,
+                aes_key: Buffer.from(uploaded.aeskey).toString("base64"),
+                encrypt_type: 1,
+            },
+            file_name: uploaded.fileName ?? "file",
+            len: String(uploaded.fileSize),
+        },
+    });
+    for (const item of items) {
+        await weixinRequest("ilink/bot/sendmessage", {
+            msg: {
+                from_user_id: "",
+                to_user_id: to,
+                client_id: generateClientId(),
+                message_type: 2,
+                message_state: 2,
+                item_list: [item],
+                ...(contextToken ? { context_token: contextToken } : {}),
+            },
+            base_info: { channel_version: CHANNEL_VERSION },
+        }, token, baseUrl);
+    }
+}
+/**
+ * Send a video message using a previously uploaded file.
+ */
+export async function sendVideoMessage(to, uploaded, token, baseUrl, contextToken, caption) {
+    const items = [];
+    if (caption)
+        items.push({ type: 1, text_item: { text: caption } });
+    items.push({
+        type: 5,
+        video_item: {
+            media: {
+                encrypt_query_param: uploaded.downloadEncryptedQueryParam,
+                aes_key: Buffer.from(uploaded.aeskey).toString("base64"),
+                encrypt_type: 1,
+            },
+            video_size: uploaded.fileSizeCiphertext,
+        },
+    });
+    for (const item of items) {
+        await weixinRequest("ilink/bot/sendmessage", {
+            msg: {
+                from_user_id: "",
+                to_user_id: to,
+                client_id: generateClientId(),
+                message_type: 2,
+                message_state: 2,
+                item_list: [item],
+                ...(contextToken ? { context_token: contextToken } : {}),
+            },
+            base_info: { channel_version: CHANNEL_VERSION },
+        }, token, baseUrl);
+    }
+}
