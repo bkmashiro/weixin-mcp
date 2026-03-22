@@ -14,6 +14,16 @@
 
 const command = process.argv[2];
 
+if (command === "--version" || command === "-v") {
+  const { createRequire } = await import("node:module");
+  const { fileURLToPath } = await import("node:url");
+  const __filename = fileURLToPath(import.meta.url);
+  const req = createRequire(__filename);
+  const { version } = req("../package.json") as { version: string };
+  console.log(`weixin-mcp v${version}`);
+  process.exit(0);
+}
+
 if (command === "login") {
   const { main } = await import("./login.js");
   await main();
@@ -47,6 +57,27 @@ if (command === "login") {
   const { manageAccounts } = await import("./accounts.js");
   await manageAccounts(process.argv.slice(3));
 
+} else if (command === "update") {
+  const { execSync } = await import("node:child_process");
+  const { createRequire } = await import("node:module");
+  const { fileURLToPath } = await import("node:url");
+  const __filename = fileURLToPath(import.meta.url);
+  const req = createRequire(__filename);
+  const current = (req("../package.json") as { version: string }).version;
+
+  process.stdout.write("Checking latest version... ");
+  const res = await fetch("https://registry.npmjs.org/weixin-mcp/latest");
+  const { version: latest } = await res.json() as { version: string };
+  console.log(`current: ${current} → latest: ${latest}`);
+
+  if (current === latest) {
+    console.log("✅ Already up to date.");
+  } else {
+    console.log(`Updating weixin-mcp ${current} → ${latest}...`);
+    execSync("npm install -g weixin-mcp@latest", { stdio: "inherit" });
+    console.log("✅ Updated! Run: npx weixin-mcp --version");
+  }
+
 } else if (command === "send") {
   const { cliSend } = await import("./messaging.js");
   await cliSend(process.argv.slice(3)); // <userId> <text...>
@@ -72,6 +103,8 @@ Commands:
   stop                         Stop daemon
   restart                      Restart daemon
   logs [-f]                    Show daemon logs (-f to follow)
+  update                       Check and install latest version
+  --version / -v               Print version
   send <userId> <text>         Send a message from CLI
   poll [--watch|-w] [--reset]  Poll messages once, or watch continuously
   accounts [list]              List all accounts
