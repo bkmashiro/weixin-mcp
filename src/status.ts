@@ -1,9 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ACCOUNTS_DIR } from "./paths.js";
+import { daemonStatus } from "./daemon.js";
 
 export async function showStatus() {
   console.log("🔍 weixin-mcp status\n");
+
+  // Daemon status
+  const { running, info } = daemonStatus();
+  if (running && info) {
+    console.log(`🟢 Daemon:    running (pid ${info.pid}, port ${info.port})`);
+    console.log(`   URL:       http://localhost:${info.port}/mcp`);
+    console.log(`   Started:   ${new Date(info.startedAt).toLocaleString()}`);
+  } else {
+    console.log("⚫ Daemon:    not running");
+    console.log("   Tip:       npx weixin-mcp start");
+  }
+  console.log();
 
   let files: string[];
   try {
