@@ -91,6 +91,22 @@ npx weixin-mcp send abc12 "hello"
 # ✓ Resolved "abc12" → abc123xyz456@im.wechat
 ```
 
+### 发送图片/文件/视频
+
+```bash
+# 发送图片
+npx weixin-mcp send abc12 --image /path/to/photo.jpg
+
+# 发送文件
+npx weixin-mcp send abc12 --file /path/to/document.pdf
+
+# 发送视频
+npx weixin-mcp send abc12 --video /path/to/video.mp4
+
+# 带文字说明
+npx weixin-mcp send abc12 --image /path/to/photo.jpg --caption "看看这张图"
+```
+
 ---
 
 ## 🔧 MCP 工具
@@ -140,6 +156,41 @@ npx weixin-mcp start --webhook http://your-server/weixin-hook
 | `contacts.json` | 联系人 |
 | `daemon.json` | Daemon 状态 |
 | `daemon.log` | 日志 |
+
+---
+
+## 🔀 多实例模式
+
+一个 bot = 一个微信账号。需要多账号时，用不同目录运行多个实例：
+
+```bash
+# 实例 A（端口 3001）
+WEIXIN_MCP_DIR=~/.weixin-mcp-a npx weixin-mcp login
+WEIXIN_MCP_DIR=~/.weixin-mcp-a npx weixin-mcp start --port 3001
+
+# 实例 B（端口 3002）
+WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp login
+WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp start --port 3002
+```
+
+Claude Desktop 配置多账号：
+
+```json
+{
+  "mcpServers": {
+    "weixin-personal": {
+      "command": "npx",
+      "args": ["weixin-mcp", "start", "--port", "3001"],
+      "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-personal" }
+    },
+    "weixin-work": {
+      "command": "npx",
+      "args": ["weixin-mcp", "start", "--port", "3002"],
+      "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-work" }
+    }
+  }
+}
+```
 
 ---
 

@@ -91,6 +91,22 @@ npx weixin-mcp send abc12 "hello"
 # ✓ Resolved "abc12" → abc123xyz456@im.wechat
 ```
 
+### Send Images/Files/Videos
+
+```bash
+# Send image
+npx weixin-mcp send abc12 --image /path/to/photo.jpg
+
+# Send file
+npx weixin-mcp send abc12 --file /path/to/document.pdf
+
+# Send video
+npx weixin-mcp send abc12 --video /path/to/video.mp4
+
+# With caption
+npx weixin-mcp send abc12 --image /path/to/photo.jpg --caption "Check this out"
+```
+
 ---
 
 ## 🔧 MCP Tools
@@ -140,6 +156,41 @@ Priority: `$WEIXIN_MCP_DIR` > `~/.openclaw/openclaw-weixin/` > `~/.weixin-mcp/`
 | `contacts.json` | Contact book |
 | `daemon.json` | Daemon state |
 | `daemon.log` | Logs |
+
+---
+
+## 🔀 Multi-Instance Mode
+
+One bot = one WeChat account. For multiple accounts, run instances in different directories:
+
+```bash
+# Instance A (port 3001)
+WEIXIN_MCP_DIR=~/.weixin-mcp-a npx weixin-mcp login
+WEIXIN_MCP_DIR=~/.weixin-mcp-a npx weixin-mcp start --port 3001
+
+# Instance B (port 3002)
+WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp login
+WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp start --port 3002
+```
+
+Claude Desktop multi-account config:
+
+```json
+{
+  "mcpServers": {
+    "weixin-personal": {
+      "command": "npx",
+      "args": ["weixin-mcp", "start", "--port", "3001"],
+      "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-personal" }
+    },
+    "weixin-work": {
+      "command": "npx",
+      "args": ["weixin-mcp", "start", "--port", "3002"],
+      "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-work" }
+    }
+  }
+}
+```
 
 ---
 
