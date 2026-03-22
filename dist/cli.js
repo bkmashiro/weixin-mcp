@@ -43,7 +43,15 @@ else if (command === "logs") {
 }
 else if (command === "accounts") {
     const { manageAccounts } = await import("./accounts.js");
-    await manageAccounts(process.argv.slice(3)); // [subcommand, ...args]
+    await manageAccounts(process.argv.slice(3));
+}
+else if (command === "send") {
+    const { cliSend } = await import("./messaging.js");
+    await cliSend(process.argv.slice(3)); // <userId> <text...>
+}
+else if (command === "poll") {
+    const { cliPoll } = await import("./messaging.js");
+    await cliPoll(process.argv.slice(3)); // [--watch] [--reset]
 }
 else if (command === undefined || command === "serve") {
     // Default: stdio MCP server (for Claude Desktop integration)
@@ -62,6 +70,8 @@ Commands:
   stop                         Stop daemon
   restart                      Restart daemon
   logs [-f]                    Show daemon logs (-f to follow)
+  send <userId> <text>         Send a message from CLI
+  poll [--watch|-w] [--reset]  Poll messages once, or watch continuously
   accounts [list]              List all accounts
   accounts remove <id>         Remove an account
   accounts clean               Remove duplicate accounts (same userId), keep newest
