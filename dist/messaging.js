@@ -7,7 +7,25 @@ import fs from "node:fs";
 import path from "node:path";
 import { ACCOUNTS_DIR } from "./paths.js";
 import { DEFAULT_BASE_URL, sendTextMessage, getUpdates, loadCursor, saveCursor, } from "./api.js";
-import { updateContactsFromMsgs } from "./contacts.js";
+import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
+/** Resolve a short/partial userId to a full one from contacts. */
+function resolveUserId(input) {
+    if (!input)
+        return input;
+    // Already looks like a full id? return as-is
+    if (input.includes("@"))
+        return input;
+    const contacts = Object.keys(loadContacts());
+    const matches = contacts.filter((id) => id.startsWith(input) || id.includes(input));
+    if (matches.length === 1)
+        return matches[0];
+    if (matches.length > 1) {
+        console.error(`Ambiguous user "${input}", matches:\n${matches.map((m) => `  ${m}`).join("\n")}`);
+        process.exit(1);
+    }
+    // Not found in contacts — treat as literal
+    return input;
+}
 function loadAccount() {
     const files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
     if (files.length === 0)
@@ -41,9 +59,12 @@ export async function cliSend(args) {
         process.exit(1);
     }
     const text = textParts.join(" ");
+    const resolvedTo = resolveUserId(to);
+    if (resolvedTo !== to)
+        console.log(`Resolved "${to}" → ${resolvedTo}`);
     const { token, baseUrl = DEFAULT_BASE_URL } = loadAccount();
-    process.stdout.write(`Sending to ${to}... `);
-    const result = await sendTextMessage(to, text, token, baseUrl);
+    process.stdout.write(`Sending to ${resolvedTo}... `);
+    const result = await sendTextMessage(resolvedTo, text, token, baseUrl);
     const ret = result?.ret ?? result?.errcode;
     if (ret === 0 || ret === undefined) {
         console.log("✅ Sent");
