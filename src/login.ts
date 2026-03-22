@@ -104,7 +104,8 @@ export async function main() {
       // Use bot_id or a random ID as account identifier
       const accountId = status.ilink_bot_id?.replace("@", "-").replace(".", "-")
         ?? crypto.randomBytes(6).toString("hex") + "-im-bot";
-      saveAccount(accountId, token, baseUrl, userId ? `${userId}@im.wechat` : undefined);
+      // userId from API already contains @im.wechat suffix — don't append again
+      saveAccount(accountId, token, baseUrl, userId ?? undefined);
       console.log(`\n🎉 Logged in! Account: ${accountId}`);
       console.log(`   UserId: ${userId ?? "(unknown)"}`);
       console.log("\nYou can now start the MCP server:");

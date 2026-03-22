@@ -41,6 +41,10 @@ else if (command === "logs") {
     const { showLogs } = await import("./daemon.js");
     showLogs(follow);
 }
+else if (command === "accounts") {
+    const { manageAccounts } = await import("./accounts.js");
+    await manageAccounts(process.argv.slice(3)); // [subcommand, ...args]
+}
 else if (command === undefined || command === "serve") {
     // Default: stdio MCP server (for Claude Desktop integration)
     await import("./index.js");
@@ -51,13 +55,17 @@ else {
 Usage: npx weixin-mcp [command]
 
 Commands:
-  (no args)          Start stdio MCP server (Claude Desktop mode)
-  login              QR code login
-  status             Show account and daemon status
-  start [--port n]   Start HTTP MCP daemon in background (default port: 3001)
-  stop               Stop daemon
-  restart            Restart daemon
-  logs [-f]          Show daemon logs (-f to follow)
+  (no args)                    Start stdio MCP server (Claude Desktop mode)
+  login                        QR code login
+  status                       Show account and daemon status
+  start [--port n]             Start HTTP MCP daemon in background (default: 3001)
+  stop                         Stop daemon
+  restart                      Restart daemon
+  logs [-f]                    Show daemon logs (-f to follow)
+  accounts [list]              List all accounts
+  accounts remove <id>         Remove an account
+  accounts clean               Remove duplicate accounts (same userId), keep newest
+  accounts use <id>            Print export command for switching accounts
 `);
     process.exit(1);
 }
