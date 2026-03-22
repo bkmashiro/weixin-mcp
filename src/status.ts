@@ -54,7 +54,8 @@ export async function showStatus() {
     const savedAt = data.savedAt ? new Date(data.savedAt).toLocaleString() : "unknown";
 
     console.log(`${hasToken ? "✅" : "❌"} Account: ${accountId}`);
-    console.log(`   User ID:   ${data.userId ?? "(unknown)"}`);
+    const displayUserId = data.userId?.replace(/@im\.wechat(@im\.wechat)+$/, "@im.wechat") ?? "(unknown)";
+    console.log(`   User ID:   ${displayUserId}`);
     console.log(`   Base URL:  ${data.baseUrl ?? "(default)"}`);
     console.log(`   Token:     ${hasToken ? `${data.token!.slice(0, 12)}... (saved ${savedAt})` : "missing"}`);
     console.log(`   Cursor:    ${hasCursor ? "✓ present" : "not yet (first poll will create)"}`);
