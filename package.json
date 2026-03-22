@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "login": "node dist/login.js",
-    "dev": "npx ts-node --esm src/index.ts"
+    "dev": "npx ts-node --esm src/index.ts",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "bin": {
     "weixin-mcp": "./dist/index.js",
