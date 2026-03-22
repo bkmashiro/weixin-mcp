@@ -13,7 +13,7 @@
   },
   "bin": {
     "weixin-mcp": "dist/cli.js",
-    "weixin-login": "dist/login.js"
+    "weixin-login": "dist/weixin-login.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
