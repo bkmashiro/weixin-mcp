@@ -9,7 +9,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextpro
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { DEFAULT_BASE_URL, getChatHistory, getContacts, pollMessages, sendTextMessage, WeixinAuthError, WeixinNetworkError, } from "./api.js";
+import { DEFAULT_BASE_URL, getContacts, pollMessages, sendTextMessage, WeixinAuthError, WeixinNetworkError, } from "./api.js";
 // ── Auth / config ──────────────────────────────────────────────────────────
 const STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() ||
     process.env.CLAWDBOT_STATE_DIR?.trim() ||
@@ -112,8 +112,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         }
         else if (name === "weixin_get_history") {
             const { to, limit = 20 } = (args ?? {});
-            const validatedTo = assertNonEmptyString(to, "to");
-            result = await getChatHistory(validatedTo, limit, token, baseUrl);
+            result = { note: "WeChat bot API does not support fetching chat history." };
         }
         else {
             throw new Error(`Unknown tool: ${name}`);

@@ -36,13 +36,15 @@ function isTransientNetworkError(error: unknown): boolean {
 }
 
 export async function weixinRequest(
-  requestPath: string,
+  endpoint: string,
   body: unknown,
   token: string,
   baseUrl = DEFAULT_BASE_URL,
   retries = 1,
 ): Promise<unknown> {
-  const url = `${baseUrl}${requestPath}`;
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const url = new URL(endpoint, base).toString();
+  const bodyStr = JSON.stringify(body);
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -50,9 +52,11 @@ export async function weixinRequest(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Length": String(Buffer.byteLength(bodyStr, "utf-8")),
+          "AuthorizationType": "ilink_bot_token",
+          "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify(body),
+        body: bodyStr,
       });
 
       if (AUTH_ERROR_STATUSES.has(res.status)) {
@@ -87,45 +91,55 @@ export async function weixinRequest(
   throw new WeixinNetworkError("Network request failed");
 }
 
+/** Send a text message. Uses real endpoint: ilink/bot/sendmessage */
 export async function sendTextMessage(to: string, text: string, token: string, baseUrl: string) {
   return weixinRequest(
-    "/v1/message/send",
+    "ilink/bot/sendmessage",
     {
       msg: {
         from_user_id: "",
         to_user_id: to,
         client_id: generateClientId(),
-        message_type: 2,
-        message_state: 2,
+        message_type: 2,   // BOT
+        message_state: 2,  // FINISH
         item_list: [{ type: 1, text_item: { text } }],
       },
+      base_info: { channel_version: "1.0.1" },
     },
     token,
     baseUrl,
   );
 }
 
-export async function getContacts(token: string, baseUrl: string) {
-  return weixinRequest("/v1/contacts/list", { page_size: 50 }, token, baseUrl);
-}
-
-export async function pollMessages(token: string, baseUrl: string, sinceTs?: number) {
+/** Long-poll for new messages. Uses real endpoint: ilink/bot/getupdates */
+export async function pollMessages(token: string, baseUrl: string, timeoutMs = 5000) {
   return weixinRequest(
-    "/v1/updates/get",
+    "ilink/bot/getupdates",
     {
-      timeout_ms: 5000,
-      ...(sinceTs ? { since_ts: sinceTs } : {}),
+      timeout_ms: timeoutMs,
+      base_info: { channel_version: "1.0.1" },
     },
     token,
     baseUrl,
   );
 }
 
-export async function getChatHistory(to: string, limit: number, token: string, baseUrl: string) {
+/** Get bot config for a user (includes context_token for replies). */
+export async function getConfig(ilinkUserId: string, token: string, baseUrl: string) {
   return weixinRequest(
-    "/v1/message/history",
-    { to_user_id: to, limit },
+    "ilink/bot/getconfig",
+    {
+      ilink_user_id: ilinkUserId,
+      base_info: { channel_version: "1.0.1" },
+    },
     token,
     baseUrl,
   );
+}
+
+// Note: WeChat bot API does not have a standalone contacts/history endpoint.
+// Contacts are tracked from incoming messages (getupdates).
+// Keeping a stub for MCP compatibility:
+export async function getContacts(_token: string, _baseUrl: string) {
+  return { note: "WeChat bot API does not support listing contacts. Use weixin_poll_messages to receive incoming messages and track senders." };
 }

@@ -15,7 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import {
   DEFAULT_BASE_URL,
-  getChatHistory,
+  
   getContacts,
   pollMessages,
   sendTextMessage,
@@ -148,8 +148,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       result = await pollMessages(token!, baseUrl, since_ts);
     } else if (name === "weixin_get_history") {
       const { to, limit = 20 } = (args ?? {}) as { to?: string; limit?: number };
-      const validatedTo = assertNonEmptyString(to, "to");
-      result = await getChatHistory(validatedTo, limit, token!, baseUrl);
+      result = { note: "WeChat bot API does not support fetching chat history." };
     } else {
       throw new Error(`Unknown tool: ${name}`);
     }
