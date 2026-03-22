@@ -12,8 +12,8 @@
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "bin": {
-    "weixin-mcp": "./dist/index.js",
-    "weixin-login": "./dist/login.js"
+    "weixin-mcp": "dist/index.js",
+    "weixin-login": "dist/login.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
