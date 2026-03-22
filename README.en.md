@@ -5,7 +5,11 @@
 
 🤖 **WeChat MCP Server** — Let AI assistants send and receive WeChat messages
 
-Expose WeChat capabilities as [MCP](https://modelcontextprotocol.io/) tools. Claude Desktop, Cursor, OpenClaw, and other AI assistants can directly:
+> ⚠️ **Important**: This project uses the official WeChat **ClawBot** (AI agent bot) API. You need to create a ClawBot in WeChat and scan to login. **This does NOT use your personal WeChat account** — it uses the official bot interface.
+>
+> 👉 Create ClawBot: WeChat → Discover → Mini Programs → Search "ClawBot"
+
+Expose WeChat ClawBot capabilities as [MCP](https://modelcontextprotocol.io/) tools. Claude Desktop, Cursor, OpenClaw, and other AI assistants can directly:
 
 - 📨 **Send messages** — text, images, files, videos
 - 📬 **Receive messages** — polling or real-time Webhook push
@@ -17,7 +21,8 @@ Expose WeChat capabilities as [MCP](https://modelcontextprotocol.io/) tools. Cla
 
 ## ✨ Features
 
-- **Zero config** — scan QR to login, no official account needed
+- **Official API** — uses WeChat ClawBot API, compliant and secure
+- **Zero config** — create ClawBot, scan QR, done
 - **All message types** — text / image / file / video
 - **Real-time push** — Webhook mode for instant delivery
 - **Multi-account** — run multiple instances in different directories

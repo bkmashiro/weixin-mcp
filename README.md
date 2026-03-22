@@ -5,7 +5,11 @@
 
 🤖 **微信 MCP Server** — 让 AI 助手直接收发微信消息
 
-将微信能力暴露为 [MCP](https://modelcontextprotocol.io/) 工具，Claude Desktop、Cursor、OpenClaw 等 AI 助手可以直接：
+> ⚠️ **重要说明**：本项目基于微信官方 **ClawBot**（智能体机器人）API，需要在微信中创建 ClawBot 后扫码登录。**不是用个人微信账号发消息**，而是通过官方机器人接口。
+>
+> 👉 创建 ClawBot：微信 → 发现 → 小程序 → 搜索「ClawBot」
+
+将微信 ClawBot 能力暴露为 [MCP](https://modelcontextprotocol.io/) 工具，Claude Desktop、Cursor、OpenClaw 等 AI 助手可以直接：
 
 - 📨 **发送消息** — 文本、图片、文件、视频
 - 📬 **接收消息** — 轮询或 Webhook 实时推送
@@ -17,7 +21,8 @@
 
 ## ✨ 特性
 
-- **零配置** — 扫码登录即用，无需申请公众号/企业微信
+- **官方接口** — 基于微信 ClawBot API，合规安全
+- **零配置** — 创建 ClawBot 后扫码即用，无需公众号/企业微信
 - **全类型消息** — 文本 / 图片 / 文件 / 视频
 - **实时推送** — Webhook 模式，消息秒级推送到你的服务
 - **多账号支持** — 不同目录运行多个实例
