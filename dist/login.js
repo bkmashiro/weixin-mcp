@@ -51,7 +51,7 @@ function saveAccount(accountId, token, baseUrl, userId) {
     }, null, 2));
     console.log(`\n✅ Token saved to: ${filePath}`);
 }
-async function main() {
+export async function main() {
     console.log("🔐 WeChat MCP — QR Login\n");
     console.log("Fetching QR code...");
     const { qrcode: qrcodeToken, qrcode_img_content: qrcodeUrl } = await fetchQRCode();
@@ -105,7 +105,10 @@ async function main() {
     console.error("\n❌ Timeout waiting for scan.");
     process.exit(1);
 }
-main().catch((err) => {
-    console.error("Error:", err);
-    process.exit(1);
-});
+// Run directly if invoked as script (not imported as module)
+if (process.argv[1]?.endsWith("login.js")) {
+    main().catch((err) => {
+        console.error("Error:", err);
+        process.exit(1);
+    });
+}

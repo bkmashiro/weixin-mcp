@@ -12,7 +12,7 @@
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "bin": {
-    "weixin-mcp": "dist/index.js",
+    "weixin-mcp": "dist/cli.js",
     "weixin-login": "dist/login.js"
   },
   "dependencies": {

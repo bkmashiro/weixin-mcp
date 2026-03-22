@@ -7,4 +7,4 @@
  * polls for scan confirmation, then saves token to:
  *   ~/.openclaw/openclaw-weixin/accounts/<accountId>.json
  */
-export {};
+export declare function main(): Promise<void>;

@@ -75,7 +75,7 @@ function saveAccount(accountId: string, token: string, baseUrl: string, userId?:
   console.log(`\n✅ Token saved to: ${filePath}`);
 }
 
-async function main() {
+export async function main() {
   console.log("🔐 WeChat MCP — QR Login\n");
 
   console.log("Fetching QR code...");
@@ -135,7 +135,10 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error("Error:", err);
-  process.exit(1);
-});
+// Run directly if invoked as script (not imported as module)
+if (process.argv[1]?.endsWith("login.js")) {
+  main().catch((err) => {
+    console.error("Error:", err);
+    process.exit(1);
+  });
+}
