@@ -50,7 +50,7 @@ export function daemonStatus(): { running: boolean; info: DaemonInfo | null } {
   return { running, info: running ? info : null };
 }
 
-export async function startDaemon(port = DEFAULT_PORT): Promise<void> {
+export async function startDaemon(port = DEFAULT_PORT, webhook?: string): Promise<void> {
   const { running, info } = daemonStatus();
   if (running && info) {
     console.log(`⚠️  Daemon already running (pid ${info.pid}, port ${info.port})`);
@@ -64,10 +64,13 @@ export async function startDaemon(port = DEFAULT_PORT): Promise<void> {
   const serverScript = path.join(__dirname, "server-http.js");
 
   const logFd = fs.openSync(LOG_FILE, "a");
-  const child = spawn(process.execPath, [serverScript, String(port)], {
+  const serverArgs = ["--port", String(port)];
+  if (webhook) serverArgs.push("--webhook", webhook);
+
+  const child = spawn(process.execPath, [serverScript, ...serverArgs], {
     detached: true,
     stdio: ["ignore", logFd, logFd],
-    env: { ...process.env, WEIXIN_MCP_PORT: String(port) },
+    env: { ...process.env, WEIXIN_MCP_PORT: String(port), WEIXIN_WEBHOOK_URL: webhook ?? "" },
   });
 
   child.unref();
@@ -93,6 +96,7 @@ export async function startDaemon(port = DEFAULT_PORT): Promise<void> {
   console.log(`   PID:  ${child.pid}`);
   console.log(`   Port: ${port}`);
   console.log(`   URL:  http://localhost:${port}/mcp`);
+  if (webhook) console.log(`   Webhook: ${webhook}`);
   console.log(`   Logs: ${LOG_FILE}`);
 }
 

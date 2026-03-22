@@ -2,19 +2,28 @@
  * HTTP MCP server — runs as a daemon process.
  * Spawned by `weixin-mcp start`, listens on a given port.
  *
- * Clients connect via: http://localhost:<port>/mcp
+ * Features:
+ * - MCP endpoint at /mcp (StreamableHTTP)
+ * - Health check at /health
+ * - Webhook push: --webhook <url> to receive new messages via POST
+ * - Auto-poll: when webhook is set, background polling forwards messages
  */
 import express from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
-// Reuse the same tool definitions and handlers from the main server
 import { DEFAULT_BASE_URL, getUpdates, getConfig, sendTextMessage, loadCursor, saveCursor, WeixinAuthError, WeixinNetworkError, } from "./api.js";
 import { ACCOUNTS_DIR } from "./paths.js";
+import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
 import fs from "node:fs";
 import path from "node:path";
-const port = Number(process.env.WEIXIN_MCP_PORT ?? process.argv[2] ?? 3001);
+// Parse CLI args
+const args = process.argv.slice(2);
+const portIdx = args.indexOf("--port");
+const port = portIdx >= 0 ? Number(args[portIdx + 1]) : Number(process.env.WEIXIN_MCP_PORT ?? 3001);
+const webhookIdx = args.indexOf("--webhook");
+const webhookUrl = webhookIdx >= 0 ? args[webhookIdx + 1] : process.env.WEIXIN_WEBHOOK_URL;
 function loadAccount() {
     const files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
     if (files.length === 0)
@@ -35,9 +44,18 @@ function fmtErr(e) {
         return e.message;
     return String(e);
 }
+function resolveUserId(input, contacts) {
+    if (!input || input.includes("@"))
+        return input;
+    const ids = Object.keys(contacts);
+    const matches = ids.filter((id) => id.startsWith(input) || id.includes(input));
+    if (matches.length === 1)
+        return matches[0];
+    return input;
+}
 // ── MCP server factory ─────────────────────────────────────────────────────
 function createMCPServer() {
-    const server = new Server({ name: "weixin-mcp", version: "1.2.2" }, { capabilities: { tools: {} } });
+    const server = new Server({ name: "weixin-mcp", version: "1.5.0" }, { capabilities: { tools: {} } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
         tools: [
             {
@@ -46,7 +64,7 @@ function createMCPServer() {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        to: { type: "string" },
+                        to: { type: "string", description: "Recipient (full ID or short prefix)" },
                         text: { type: "string" },
                         context_token: { type: "string" },
                     },
@@ -60,6 +78,11 @@ function createMCPServer() {
                     type: "object",
                     properties: { reset_cursor: { type: "boolean" } },
                 },
+            },
+            {
+                name: "weixin_contacts",
+                description: "List users who have messaged the bot.",
+                inputSchema: { type: "object", properties: {} },
             },
             {
                 name: "weixin_get_config",
@@ -82,7 +105,8 @@ function createMCPServer() {
             let result;
             if (name === "weixin_send") {
                 const a = (args ?? {});
-                result = await sendTextMessage(assertStr(a.to, "to"), assertStr(a.text, "text"), token, baseUrl, a.context_token);
+                const resolvedTo = resolveUserId(assertStr(a.to, "to"), loadContacts());
+                result = await sendTextMessage(resolvedTo, assertStr(a.text, "text"), token, baseUrl, a.context_token);
             }
             else if (name === "weixin_poll") {
                 const { reset_cursor } = (args ?? {});
@@ -90,7 +114,12 @@ function createMCPServer() {
                 const resp = await getUpdates(token, baseUrl, cursor);
                 if (resp.get_updates_buf)
                     saveCursor(accountId, resp.get_updates_buf);
+                if (resp.msgs && resp.msgs.length > 0)
+                    updateContactsFromMsgs(resp.msgs);
                 result = resp;
+            }
+            else if (name === "weixin_contacts") {
+                result = Object.values(loadContacts());
             }
             else if (name === "weixin_get_config") {
                 const a = (args ?? {});
@@ -107,17 +136,55 @@ function createMCPServer() {
     });
     return server;
 }
+// ── Webhook push ───────────────────────────────────────────────────────────
+async function pushToWebhook(msgs) {
+    if (!webhookUrl || msgs.length === 0)
+        return;
+    try {
+        await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ event: "weixin_messages", messages: msgs, timestamp: new Date().toISOString() }),
+        });
+    }
+    catch (err) {
+        console.error("[weixin-mcp] webhook push failed:", fmtErr(err));
+    }
+}
+// ── Background poller (when webhook is set) ────────────────────────────────
+async function startBackgroundPoller() {
+    if (!webhookUrl)
+        return;
+    console.log(`[weixin-mcp] Webhook enabled: ${webhookUrl}`);
+    console.log("[weixin-mcp] Starting background poller...");
+    while (true) {
+        try {
+            const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
+            const cursor = loadCursor(accountId);
+            const resp = await getUpdates(token, baseUrl, cursor);
+            if (resp.get_updates_buf)
+                saveCursor(accountId, resp.get_updates_buf);
+            if (resp.msgs && resp.msgs.length > 0) {
+                updateContactsFromMsgs(resp.msgs);
+                await pushToWebhook(resp.msgs);
+                console.log(`[weixin-mcp] Pushed ${resp.msgs.length} message(s) to webhook`);
+            }
+        }
+        catch (err) {
+            console.error("[weixin-mcp] poll error:", fmtErr(err));
+            await new Promise((r) => setTimeout(r, 5000)); // backoff on error
+        }
+        // getUpdates is long-poll (~30s timeout), so no extra delay needed
+    }
+}
 // ── Express HTTP server ────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
-// Session store for stateful transports
 const sessions = new Map();
 app.post("/mcp", async (req, res) => {
-    // Check if this is an existing session
     const sessionId = req.headers["mcp-session-id"];
     let transport = sessionId ? sessions.get(sessionId) : undefined;
     if (!transport) {
-        // New session
         const newSessionId = randomUUID();
         transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => newSessionId,
@@ -148,9 +215,11 @@ app.delete("/mcp", async (req, res) => {
     await transport.handleRequest(req, res);
 });
 app.get("/health", (_req, res) => {
-    res.json({ status: "ok", port, sessions: sessions.size });
+    res.json({ status: "ok", port, sessions: sessions.size, webhook: webhookUrl ?? null });
 });
 app.listen(port, () => {
-    console.log(`[weixin-mcp] HTTP MCP server listening on port ${port}`);
-    console.log(`[weixin-mcp] MCP endpoint: http://localhost:${port}/mcp`);
+    console.log(`[weixin-mcp] HTTP MCP server on port ${port}`);
+    console.log(`[weixin-mcp] MCP: http://localhost:${port}/mcp`);
+    if (webhookUrl)
+        startBackgroundPoller();
 });

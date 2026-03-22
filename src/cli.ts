@@ -35,8 +35,10 @@ if (command === "login") {
 } else if (command === "start") {
   const portArg = process.argv.indexOf("--port");
   const port = portArg !== -1 ? Number(process.argv[portArg + 1]) : undefined;
+  const webhookArg = process.argv.indexOf("--webhook");
+  const webhook = webhookArg !== -1 ? process.argv[webhookArg + 1] : undefined;
   const { startDaemon } = await import("./daemon.js");
-  await startDaemon(port);
+  await startDaemon(port, webhook);
 
 } else if (command === "stop") {
   const { stopDaemon } = await import("./daemon.js");
@@ -115,7 +117,7 @@ Commands:
   (no args)                    Start stdio MCP server (Claude Desktop mode)
   login                        QR code login
   status                       Show account and daemon status
-  start [--port n]             Start HTTP MCP daemon in background (default: 3001)
+  start [--port n] [--webhook url]  Start HTTP daemon (with optional webhook push)
   stop                         Stop daemon
   restart                      Restart daemon
   logs [-f]                    Show daemon logs (-f to follow)
