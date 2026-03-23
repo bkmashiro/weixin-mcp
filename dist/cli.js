@@ -102,6 +102,10 @@ else if (command === "poll") {
     const { cliPoll } = await import("./messaging.js");
     await cliPoll(process.argv.slice(3)); // [--watch] [--reset]
 }
+else if (command === "download") {
+    const { cliDownload } = await import("./messaging.js");
+    await cliDownload(process.argv.slice(3));
+}
 else if (command === undefined || command === "serve") {
     // Default: stdio MCP server (for Claude Desktop integration)
     await import("./index.js");
@@ -127,6 +131,7 @@ Commands:
   send <userId> --file <path> [--caption <text>]   Send a file
   send <userId> --video <path> [--caption <text>]  Send a video
   poll [--watch|-w] [--reset]  Poll messages once, or watch continuously
+  download --encrypt-param <p> --aes-key <k> [-o file]  Download media from message
   accounts [list]              List all accounts
   accounts remove <id>         Remove an account
   accounts clean               Remove duplicate accounts (same userId), keep newest

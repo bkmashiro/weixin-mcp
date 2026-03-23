@@ -15,7 +15,7 @@ import {
   loadCursor,
   saveCursor,
 } from "./api.js";
-import { uploadMedia, type MediaType } from "./cdn.js";
+import { uploadMedia, downloadMedia, downloadMediaToFile, type MediaType, type DownloadParams } from "./cdn.js";
 import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
 
 /** Resolve a short/partial userId to a full one from contacts. */
@@ -163,6 +163,54 @@ export async function cliSend(args: string[]) {
     }
   } else {
     console.error("Nothing to send. Provide text or --image/--file/--video");
+    process.exit(1);
+  }
+}
+
+/**
+ * Download media from a received message.
+ * Usage: npx weixin-mcp download --encrypt-param <param> --aes-key <key> -o <output>
+ */
+export async function cliDownload(args: string[]) {
+  let encryptParam = "";
+  let aesKey = "";
+  let outputPath = "";
+  
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === "--encrypt-param" || args[i] === "-e") && args[i + 1]) {
+      encryptParam = args[++i];
+    } else if ((args[i] === "--aes-key" || args[i] === "-k") && args[i + 1]) {
+      aesKey = args[++i];
+    } else if ((args[i] === "-o" || args[i] === "--output") && args[i + 1]) {
+      outputPath = args[++i];
+    }
+  }
+  
+  if (!encryptParam || !aesKey) {
+    console.error(`Usage: npx weixin-mcp download --encrypt-param <param> --aes-key <key> [-o <output>]
+
+Extract these values from a received message:
+  - encrypt_query_param: from image_item.media.encrypt_query_param or file_item.media.encrypt_query_param
+  - aes_key: from image_item.aeskey or file_item's aes_key (hex string)`);
+    process.exit(1);
+  }
+  
+  try {
+    process.stdout.write("Downloading... ");
+    
+    if (outputPath) {
+      await downloadMediaToFile({ encryptQueryParam: encryptParam, aesKey }, outputPath);
+      console.log(`✅ Saved to ${outputPath}`);
+    } else {
+      // Output to stdout as base64
+      const data = await downloadMedia({ encryptQueryParam: encryptParam, aesKey });
+      console.log("✅");
+      console.log(`Size: ${data.length} bytes`);
+      console.log(`Base64: ${data.toString("base64").slice(0, 100)}...`);
+    }
+  } catch (err) {
+    console.log("❌");
+    console.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 }

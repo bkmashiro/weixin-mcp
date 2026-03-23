@@ -4,4 +4,9 @@
  *   npx weixin-mcp poll [--watch] [--reset] — poll for messages (once or continuous)
  */
 export declare function cliSend(args: string[]): Promise<void>;
+/**
+ * Download media from a received message.
+ * Usage: npx weixin-mcp download --encrypt-param <param> --aes-key <key> -o <output>
+ */
+export declare function cliDownload(args: string[]): Promise<void>;
 export declare function cliPoll(args: string[]): Promise<void>;

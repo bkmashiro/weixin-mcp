@@ -9,7 +9,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextpro
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_BASE_URL, getUpdates, getConfig, sendTextMessage, sendImageMessage, sendFileMessage, loadCursor, saveCursor, WeixinAuthError, WeixinNetworkError, } from "./api.js";
-import { uploadMedia } from "./cdn.js";
+import { uploadMedia, downloadMedia } from "./cdn.js";
 import { ACCOUNTS_DIR } from "./paths.js";
 import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
 /** Resolve short userId prefix to full ID from contacts. */
@@ -131,6 +131,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 required: ["user_id"],
             },
         },
+        {
+            name: "weixin_download",
+            description: "Download media (image/file/video) from a received message. Extract encrypt_query_param and aes_key from the message's image_item, file_item, or video_item.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    encrypt_query_param: {
+                        type: "string",
+                        description: "The encrypt_query_param from the media item (e.g., image_item.media.encrypt_query_param)"
+                    },
+                    aes_key: {
+                        type: "string",
+                        description: "The AES key (hex string) from the media item (e.g., image_item.aeskey)"
+                    },
+                },
+                required: ["encrypt_query_param", "aes_key"],
+            },
+        },
     ],
 }));
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -194,6 +212,21 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
             const { user_id, context_token } = (args ?? {});
             const validatedUserId = assertNonEmptyString(user_id, "user_id");
             result = await getConfig(validatedUserId, token, baseUrl, context_token);
+        }
+        else if (name === "weixin_download") {
+            const { encrypt_query_param, aes_key } = (args ?? {});
+            const validatedParam = assertNonEmptyString(encrypt_query_param, "encrypt_query_param");
+            const validatedKey = assertNonEmptyString(aes_key, "aes_key");
+            const data = await downloadMedia({
+                encryptQueryParam: validatedParam,
+                aesKey: validatedKey,
+            });
+            // Return as base64 with size info
+            result = {
+                success: true,
+                size: data.length,
+                base64: data.toString("base64"),
+            };
         }
         else {
             throw new Error(`Unknown tool: ${name}`);

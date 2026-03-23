@@ -75,6 +75,7 @@ npx weixin-mcp
 | `status` | 查看账号和 daemon 状态 |
 | `send <to> <text>` | 发送消息（支持短 ID） |
 | `poll [--watch]` | 拉取消息 |
+| `download -e <param> -k <key> -o <file>` | 下载媒体文件 |
 | `contacts` | 查看联系人 |
 | `start [--webhook url]` | 启动 HTTP daemon |
 | `stop` / `restart` | 停止/重启 daemon |

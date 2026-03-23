@@ -115,6 +115,65 @@ async function uploadToCdn(params: {
  * Upload a file (local path or URL) to Weixin CDN.
  * Returns UploadedMedia with all params needed for sendMessage.
  */
+// ── AES-128-ECB Decryption ─────────────────────────────────────────────────
+
+function decryptAesEcb(ciphertext: Buffer, key: Buffer): Buffer {
+  const decipher = crypto.createDecipheriv("aes-128-ecb", key, null);
+  decipher.setAutoPadding(true);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+// ── Download from CDN ──────────────────────────────────────────────────────
+
+export interface DownloadParams {
+  encryptQueryParam: string;
+  aesKey: string; // hex string
+}
+
+/**
+ * Download and decrypt a media file from Weixin CDN.
+ * Returns the decrypted plaintext Buffer.
+ */
+export async function downloadMedia(params: DownloadParams): Promise<Buffer> {
+  const { encryptQueryParam, aesKey } = params;
+  
+  // Build download URL
+  const cdnUrl = `${CDN_BASE_URL}/download?encrypted_query_param=${encodeURIComponent(encryptQueryParam)}`;
+  
+  const res = await fetch(cdnUrl, {
+    method: "GET",
+    headers: {
+      "Accept": "*/*",
+    },
+  });
+  
+  if (!res.ok) {
+    const errMsg = res.headers.get("x-error-message") ?? `status ${res.status}`;
+    throw new Error(`CDN download failed: ${errMsg}`);
+  }
+  
+  const ciphertext = Buffer.from(await res.arrayBuffer());
+  
+  // Decrypt
+  const keyBuffer = Buffer.from(aesKey, "hex");
+  const plaintext = decryptAesEcb(ciphertext, keyBuffer);
+  
+  return plaintext;
+}
+
+/**
+ * Download media to a local file.
+ */
+export async function downloadMediaToFile(
+  params: DownloadParams,
+  outputPath: string,
+): Promise<void> {
+  const data = await downloadMedia(params);
+  await fs.writeFile(outputPath, data);
+}
+
+// ── Main upload function ───────────────────────────────────────────────────
+
 export async function uploadMedia(params: {
   source: string;       // file path or URL
   mediaType: MediaType;
