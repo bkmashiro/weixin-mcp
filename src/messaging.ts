@@ -47,14 +47,55 @@ function loadAccount(): AccountData & { accountId: string } {
   return { ...data, accountId };
 }
 
+interface MediaItem {
+  media?: { encrypt_query_param?: string };
+  aeskey?: string;
+  url?: string;
+}
+
 function formatMsg(msg: Record<string, unknown>): string {
   const from = String(msg.from_user_id ?? "?");
-  const items = (msg.item_list as Array<{ type: number; text_item?: { text: string }; image_item?: { url: string } }>) ?? [];
+  const items = (msg.item_list as Array<{ 
+    type: number; 
+    text_item?: { text: string }; 
+    image_item?: MediaItem;
+    file_item?: MediaItem & { file_name?: string };
+    video_item?: MediaItem;
+  }>) ?? [];
   const parts: string[] = [];
   for (const item of items) {
-    if (item.type === 1 && item.text_item?.text) parts.push(item.text_item.text);
-    else if (item.type === 2 && item.image_item?.url) parts.push(`[image: ${item.image_item.url}]`);
-    else parts.push(`[type:${item.type}]`);
+    if (item.type === 1 && item.text_item?.text) {
+      parts.push(item.text_item.text);
+    } else if (item.type === 2 && item.image_item) {
+      // Image
+      const img = item.image_item;
+      if (img.url) {
+        parts.push(`[image: ${img.url}]`);
+      } else if (img.media?.encrypt_query_param && img.aeskey) {
+        parts.push(`[image: encrypted | param=${img.media.encrypt_query_param.slice(0, 30)}... | key=${img.aeskey}]`);
+      } else {
+        parts.push(`[image: unknown format]`);
+      }
+    } else if (item.type === 4 && item.file_item) {
+      // File
+      const file = item.file_item;
+      const name = file.file_name ?? "file";
+      if (file.media?.encrypt_query_param && file.aeskey) {
+        parts.push(`[file: ${name} | param=${file.media.encrypt_query_param.slice(0, 30)}... | key=${file.aeskey}]`);
+      } else {
+        parts.push(`[file: ${name}]`);
+      }
+    } else if (item.type === 5 && item.video_item) {
+      // Video
+      const vid = item.video_item;
+      if (vid.media?.encrypt_query_param && vid.aeskey) {
+        parts.push(`[video: encrypted | param=${vid.media.encrypt_query_param.slice(0, 30)}... | key=${vid.aeskey}]`);
+      } else {
+        parts.push(`[video]`);
+      }
+    } else {
+      parts.push(`[type:${item.type}]`);
+    }
   }
   const msgType = Number(msg.message_type);
   const prefix = msgType === 1 ? "← " : "→ "; // incoming vs outgoing
