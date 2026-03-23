@@ -42,7 +42,7 @@ test("weixinRequest returns auth guidance for expired token", async () => {
       () => weixinRequest("/v1/test", {}, "token", "https://example.com"),
       (error) => {
         assert.ok(error instanceof WeixinAuthError);
-        assert.match(error.message, /Run npm run login to re-authenticate/);
+        assert.match(error.message, /Run: npm run login/);
         return true;
       },
     );
