@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import { daemonStatus } from "./daemon.js";
 export async function showStatus() {
     console.log("🔍 weixin-mcp status\n");
@@ -18,7 +18,7 @@ export async function showStatus() {
     console.log();
     let files;
     try {
-        files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
+        files = fs.readdirSync(ACCOUNTS_DIR).filter(isAccountFile);
     }
     catch {
         console.log("❌ No accounts directory found.");

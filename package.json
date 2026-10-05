@@ -16,7 +16,7 @@
     "weixin-login": "dist/weixin-login.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "express": "^5.2.1",
     "qrcode-terminal": "^0.12.0"
   },

@@ -127,8 +127,12 @@ npx weixin-mcp send abc12 --image /path/to/photo.jpg --caption "Check this out"
 Receive messages in real-time:
 
 ```bash
-npx weixin-mcp start --webhook http://your-server/weixin-hook
+npx weixin-mcp start --webhook http://127.0.0.1:8080/weixin-hook
 ```
+
+HTTP MCP binds only to `127.0.0.1` and validates Host / Origin. It is not directly exposed to the LAN or internet. Use only trusted webhook receivers: payloads contain message content and context tokens.
+
+Return 2xx after processing. Non-2xx responses, network failures and a 10-second timeout retry the pending batch without advancing the cursor. Delivery can repeat, so deduplicate using message identifiers. This is not a durable message queue. Do not poll the same account via CLI / stdio while webhook mode is active; HTTP `weixin_poll` rejects calls in this mode.
 
 Messages are POSTed to your webhook:
 
@@ -157,6 +161,11 @@ Priority: `$WEIXIN_MCP_DIR` > `~/.openclaw/openclaw-weixin/` > `~/.weixin-mcp/`
 | `daemon.json` | Daemon state |
 | `daemon.log` | Logs |
 
+With `WEIXIN_MCP_DIR`, the existing flat layout is preserved: `<id>.json` and `<id>.cursor.json` are stored directly in that directory, alongside `contacts.json`, `daemon.json` and `daemon.log`. Without an override, accounts use the `accounts/` subdirectory shown above.
+
+Stop existing daemons using the old version before upgrading. Older versions shared `contacts.json` in the parent of a custom directory. Contacts are now isolated per instance; copy the old file into the appropriate custom directory if needed. Contacts from other accounts are not merged automatically.
+
+
 ---
 
 ## 🔀 Multi-Instance Mode
@@ -173,6 +182,8 @@ WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp login
 WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp start --port 3002
 ```
 
+Claude Desktop uses stdio, so no `start` command or HTTP port is needed. Avoid another message poller for the same account.
+
 Claude Desktop multi-account config:
 
 ```json
@@ -180,12 +191,12 @@ Claude Desktop multi-account config:
   "mcpServers": {
     "weixin-personal": {
       "command": "npx",
-      "args": ["weixin-mcp", "start", "--port", "3001"],
+      "args": ["weixin-mcp"],
       "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-personal" }
     },
     "weixin-work": {
       "command": "npx",
-      "args": ["weixin-mcp", "start", "--port", "3002"],
+      "args": ["weixin-mcp"],
       "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-work" }
     }
   }

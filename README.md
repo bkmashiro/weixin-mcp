@@ -128,8 +128,12 @@ npx weixin-mcp send abc12 --image /path/to/photo.jpg --caption "看看这张图"
 实时接收消息推送：
 
 ```bash
-npx weixin-mcp start --webhook http://your-server/weixin-hook
+npx weixin-mcp start --webhook http://127.0.0.1:8080/weixin-hook
 ```
+
+HTTP MCP 只监听 `127.0.0.1`，并校验 Host / Origin，不直接对局域网或公网开放。仅将 webhook 配置为你信任的接收端，因为推送包含消息内容与 context token。
+
+接收端应在处理完成后返回 2xx。非 2xx、网络失败或 10 秒超时会重试当前批次，成功前不会推进 cursor。重试可能重复投递，接收端应按消息标识去重；这不是持久化消息队列。Webhook 模式下不要同时使用 CLI / stdio 轮询同一账号，HTTP `weixin_poll` 会拒绝调用。
 
 收到消息时 POST 到 webhook：
 
@@ -158,6 +162,11 @@ npx weixin-mcp start --webhook http://your-server/weixin-hook
 | `daemon.json` | Daemon 状态 |
 | `daemon.log` | 日志 |
 
+设置 `WEIXIN_MCP_DIR` 时，保留历史布局：账号 `<id>.json` 和 `<id>.cursor.json` 直接放在指定目录中，`contacts.json`、`daemon.json`、`daemon.log` 也放在该目录。未设置时，账号使用上表的 `accounts/` 子目录。
+
+升级前用旧版本停止现有 daemon。旧版本在自定义目录的父目录共享 `contacts.json`；升级后联系人按实例隔离，需要时手动复制该文件到对应的自定义目录，不会自动合并其他账号联系人。
+
+
 ---
 
 ## 🔀 多实例模式
@@ -174,6 +183,8 @@ WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp login
 WEIXIN_MCP_DIR=~/.weixin-mcp-b npx weixin-mcp start --port 3002
 ```
 
+Claude Desktop 使用 stdio，无需 `start` 或 HTTP 端口；不要同时在同一账号启动另一套收消息轮询。
+
 Claude Desktop 配置多账号：
 
 ```json
@@ -181,12 +192,12 @@ Claude Desktop 配置多账号：
   "mcpServers": {
     "weixin-personal": {
       "command": "npx",
-      "args": ["weixin-mcp", "start", "--port", "3001"],
+      "args": ["weixin-mcp"],
       "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-personal" }
     },
     "weixin-work": {
       "command": "npx",
-      "args": ["weixin-mcp", "start", "--port", "3002"],
+      "args": ["weixin-mcp"],
       "env": { "WEIXIN_MCP_DIR": "/Users/you/.weixin-mcp-work" }
     }
   }

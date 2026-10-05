@@ -4,9 +4,9 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { DATA_DIR } from "./paths.js";
 function contactsPath() {
-    return path.join(path.dirname(ACCOUNTS_DIR), "contacts.json");
+    return path.join(DATA_DIR, "contacts.json");
 }
 export function loadContacts() {
     try {

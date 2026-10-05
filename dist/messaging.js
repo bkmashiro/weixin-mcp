@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import { DEFAULT_BASE_URL, sendTextMessage, sendMediaMessage, getUpdates, loadCursor, saveCursor, } from "./api.js";
 import { uploadMedia, downloadMedia, downloadMediaToFile } from "./cdn.js";
 import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
@@ -28,7 +28,7 @@ function resolveUserId(input) {
     return input;
 }
 function loadAccount() {
-    const files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
+    const files = fs.readdirSync(ACCOUNTS_DIR).filter(isAccountFile);
     if (files.length === 0)
         throw new Error("No account. Run: npx weixin-mcp login");
     const accountId = process.env.WEIXIN_ACCOUNT_ID ?? files[0].replace(".json", "");

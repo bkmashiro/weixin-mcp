@@ -7,3 +7,5 @@
  * 3. Default → ~/.weixin-mcp/accounts/
  */
 export declare const ACCOUNTS_DIR: string;
+export declare const DATA_DIR: string;
+export declare function isAccountFile(file: string): boolean;
