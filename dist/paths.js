@@ -26,3 +26,11 @@ function resolveAccountsDir() {
     return path.join(os.homedir(), ".weixin-mcp", "accounts");
 }
 export const ACCOUNTS_DIR = resolveAccountsDir();
+// Preserve the existing flat account layout for explicit overrides.
+export const DATA_DIR = process.env.WEIXIN_MCP_DIR?.trim()
+    ? ACCOUNTS_DIR
+    : path.dirname(ACCOUNTS_DIR);
+export function isAccountFile(file) {
+    return file.endsWith(".json") && !file.endsWith(".sync.json") &&
+        !file.endsWith(".cursor.json") && file !== "contacts.json" && file !== "daemon.json";
+}

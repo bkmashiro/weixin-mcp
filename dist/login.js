@@ -10,7 +10,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 // @ts-ignore — no types for qrcode-terminal
 import qrcode from "qrcode-terminal";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 const BASE_URL = "https://ilinkai.weixin.qq.com";
 const BOT_TYPE = "3";
 async function fetchQRCode() {
@@ -35,7 +35,7 @@ async function pollStatus(qrcodeVal) {
 function findAccountByUserId(userId) {
     if (!fs.existsSync(ACCOUNTS_DIR))
         return null;
-    const files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.includes("sync") && !f.includes("cursor"));
+    const files = fs.readdirSync(ACCOUNTS_DIR).filter(isAccountFile);
     for (const file of files) {
         try {
             const data = JSON.parse(fs.readFileSync(path.join(ACCOUNTS_DIR, file), "utf-8"));

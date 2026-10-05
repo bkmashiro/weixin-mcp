@@ -28,7 +28,7 @@ import {
   WeixinAuthError,
   WeixinNetworkError,
 } from "./api.js";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import { updateContactsFromMsgs, loadContacts, type ContactBook } from "./contacts.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -46,7 +46,7 @@ interface AccountData { token?: string; baseUrl?: string; userId?: string }
 
 function loadAccount(): AccountData & { accountId: string } {
   const files = fs.readdirSync(ACCOUNTS_DIR).filter(
-    (f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"),
+    isAccountFile,
   );
   if (files.length === 0) throw new Error("No WeChat account. Run: npx weixin-mcp login");
   const accountId = process.env.WEIXIN_ACCOUNT_ID ?? files[0].replace(".json", "");
@@ -125,15 +125,16 @@ function createMCPServer() {
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
     const { name, arguments: args } = req.params;
     try {
+      const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
       let result: unknown;
       if (name === "weixin_send") {
         const a = (args ?? {}) as { to?: string; text?: string; context_token?: string };
         const resolvedTo = resolveUserId(assertStr(a.to, "to"), loadContacts());
         result = await sendTextMessage(resolvedTo, assertStr(a.text, "text"), token!, baseUrl, a.context_token);
       } else if (name === "weixin_poll") {
+        if (webhookUrl) throw new Error("Polling is owned by the webhook worker. Disable webhook mode before calling weixin_poll.");
         const { reset_cursor } = (args ?? {}) as { reset_cursor?: boolean };
         const cursor = reset_cursor ? "" : loadCursor(accountId);
         const resp = await getUpdates(token!, baseUrl, cursor);
@@ -161,15 +162,14 @@ function createMCPServer() {
 
 async function pushToWebhook(msgs: unknown[]) {
   if (!webhookUrl || msgs.length === 0) return;
-  try {
-    await fetch(webhookUrl, {
+  const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event: "weixin_messages", messages: msgs, timestamp: new Date().toISOString() }),
+      signal: AbortSignal.timeout(10000),
     });
-  } catch (err) {
-    console.error("[weixin-mcp] webhook push failed:", fmtErr(err));
-  }
+  await res.body?.cancel();
+  if (!res.ok) throw new Error(`Webhook returned HTTP ${res.status}`);
 }
 
 // ── Background poller (when webhook is set) ────────────────────────────────
@@ -179,19 +179,23 @@ async function startBackgroundPoller() {
   console.log(`[weixin-mcp] Webhook enabled: ${webhookUrl}`);
   console.log("[weixin-mcp] Starting background poller...");
 
+  let pending: { accountId: string; response: Awaited<ReturnType<typeof getUpdates>> } | undefined;
   while (true) {
     try {
-      const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
-      const cursor = loadCursor(accountId);
-      const resp = await getUpdates(token!, baseUrl, cursor);
-
-      if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
+      if (!pending) {
+        const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
+        const response = await getUpdates(token!, baseUrl, loadCursor(accountId));
+        pending = { accountId, response };
+      }
+      const { accountId, response: resp } = pending;
 
       if (resp.msgs && resp.msgs.length > 0) {
-        updateContactsFromMsgs(resp.msgs as unknown[]);
         await pushToWebhook(resp.msgs);
+        updateContactsFromMsgs(resp.msgs as unknown[]);
         console.log(`[weixin-mcp] Pushed ${resp.msgs.length} message(s) to webhook`);
       }
+      if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
+      pending = undefined;
     } catch (err) {
       console.error("[weixin-mcp] poll error:", fmtErr(err));
       await new Promise((r) => setTimeout(r, 5000)); // backoff on error
@@ -203,6 +207,24 @@ async function startBackgroundPoller() {
 // ── Express HTTP server ────────────────────────────────────────────────────
 
 const app = express();
+// Local-only service: also reject browser cross-origin access and DNS rebinding.
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+app.use((req, res, next) => {
+  try {
+    const host = new URL(`http://${req.headers.host}`);
+    if (!loopbackHosts.has(host.hostname) || host.port !== String(port)) throw new Error("Invalid Host");
+    const originHeader = req.headers.origin;
+    if (originHeader) {
+      const origin = new URL(originHeader);
+      if (origin.protocol !== "http:" || !loopbackHosts.has(origin.hostname) || origin.port !== String(port)) {
+        throw new Error("Invalid Origin");
+      }
+    }
+    next();
+  } catch {
+    res.status(403).json({ error: "Only local requests are allowed" });
+  }
+});
 app.use(express.json());
 
 const sessions = new Map<string, StreamableHTTPServerTransport>();
@@ -243,7 +265,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", port, sessions: sessions.size, webhook: webhookUrl ?? null });
 });
 
-app.listen(port, () => {
+app.listen(port, "127.0.0.1", () => {
   console.log(`[weixin-mcp] HTTP MCP server on port ${port}`);
   console.log(`[weixin-mcp] MCP: http://localhost:${port}/mcp`);
   if (webhookUrl) startBackgroundPoller();

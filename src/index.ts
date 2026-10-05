@@ -25,7 +25,7 @@ import {
   WeixinNetworkError,
 } from "./api.js";
 import { uploadMedia, downloadMedia } from "./cdn.js";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import { updateContactsFromMsgs, loadContacts, type ContactBook } from "./contacts.js";
 
 /** Resolve short userId prefix to full ID from contacts. */
@@ -51,7 +51,7 @@ interface AccountData {
 function loadAccount(): AccountData & { accountId: string } {
   const files = fs
     .readdirSync(WEIXIN_DIR)
-    .filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
+    .filter(isAccountFile);
   if (files.length === 0)
     throw new Error("No WeChat account found. Run: npm run login");
 
@@ -195,12 +195,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  const account = loadAccount();
-  const { token, baseUrl = DEFAULT_BASE_URL, accountId } = account;
-
   const { name, arguments: args } = req.params;
 
   try {
+    const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
     let result: unknown;
 
     if (name === "weixin_send") {

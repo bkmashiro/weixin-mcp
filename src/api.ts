@@ -100,7 +100,12 @@ export async function weixinRequest(
         const msg = await parseErrorResponse(res);
         throw new Error(`Weixin API error ${res.status}: ${msg}`);
       }
-      return res.json();
+      const data = await res.json() as { ret?: number; errcode?: number; errmsg?: string } | null;
+      if (data && ((data.ret !== undefined && data.ret !== 0) ||
+                   (data.errcode !== undefined && data.errcode !== 0))) {
+        throw new Error(`Weixin API rejected request (${data.errcode || data.ret}): ${data.errmsg || "unknown error"}`);
+      }
+      return data;
     } catch (err) {
       if (err instanceof WeixinAuthError) throw err;
       if (err instanceof TypeError && attempt < retries) continue; // network retry

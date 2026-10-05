@@ -6,7 +6,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import {
   DEFAULT_BASE_URL,
   sendTextMessage,
@@ -38,7 +38,7 @@ interface AccountData { token?: string; baseUrl?: string; userId?: string }
 
 function loadAccount(): AccountData & { accountId: string } {
   const files = fs.readdirSync(ACCOUNTS_DIR).filter(
-    (f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"),
+    isAccountFile,
   );
   if (files.length === 0) throw new Error("No account. Run: npx weixin-mcp login");
   const accountId = process.env.WEIXIN_ACCOUNT_ID ?? files[0].replace(".json", "");

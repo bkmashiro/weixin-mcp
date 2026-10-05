@@ -81,7 +81,12 @@ export async function weixinRequest(endpoint, body, token, baseUrl = DEFAULT_BAS
                 const msg = await parseErrorResponse(res);
                 throw new Error(`Weixin API error ${res.status}: ${msg}`);
             }
-            return res.json();
+            const data = await res.json();
+            if (data && ((data.ret !== undefined && data.ret !== 0) ||
+                (data.errcode !== undefined && data.errcode !== 0))) {
+                throw new Error(`Weixin API rejected request (${data.errcode || data.ret}): ${data.errmsg || "unknown error"}`);
+            }
+            return data;
         }
         catch (err) {
             if (err instanceof WeixinAuthError)

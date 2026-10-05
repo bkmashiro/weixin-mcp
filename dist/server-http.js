@@ -14,7 +14,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
 import { DEFAULT_BASE_URL, getUpdates, getConfig, sendTextMessage, loadCursor, saveCursor, WeixinAuthError, WeixinNetworkError, } from "./api.js";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import { updateContactsFromMsgs, loadContacts } from "./contacts.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -25,7 +25,7 @@ const port = portIdx >= 0 ? Number(args[portIdx + 1]) : Number(process.env.WEIXI
 const webhookIdx = args.indexOf("--webhook");
 const webhookUrl = webhookIdx >= 0 ? args[webhookIdx + 1] : process.env.WEIXIN_WEBHOOK_URL;
 function loadAccount() {
-    const files = fs.readdirSync(ACCOUNTS_DIR).filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
+    const files = fs.readdirSync(ACCOUNTS_DIR).filter(isAccountFile);
     if (files.length === 0)
         throw new Error("No WeChat account. Run: npx weixin-mcp login");
     const accountId = process.env.WEIXIN_ACCOUNT_ID ?? files[0].replace(".json", "");
@@ -99,9 +99,9 @@ function createMCPServer() {
         ],
     }));
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
-        const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
         const { name, arguments: args } = req.params;
         try {
+            const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
             let result;
             if (name === "weixin_send") {
                 const a = (args ?? {});
@@ -109,6 +109,8 @@ function createMCPServer() {
                 result = await sendTextMessage(resolvedTo, assertStr(a.text, "text"), token, baseUrl, a.context_token);
             }
             else if (name === "weixin_poll") {
+                if (webhookUrl)
+                    throw new Error("Polling is owned by the webhook worker. Disable webhook mode before calling weixin_poll.");
                 const { reset_cursor } = (args ?? {});
                 const cursor = reset_cursor ? "" : loadCursor(accountId);
                 const resp = await getUpdates(token, baseUrl, cursor);
@@ -140,16 +142,15 @@ function createMCPServer() {
 async function pushToWebhook(msgs) {
     if (!webhookUrl || msgs.length === 0)
         return;
-    try {
-        await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "weixin_messages", messages: msgs, timestamp: new Date().toISOString() }),
-        });
-    }
-    catch (err) {
-        console.error("[weixin-mcp] webhook push failed:", fmtErr(err));
-    }
+    const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: "weixin_messages", messages: msgs, timestamp: new Date().toISOString() }),
+        signal: AbortSignal.timeout(10000),
+    });
+    await res.body?.cancel();
+    if (!res.ok)
+        throw new Error(`Webhook returned HTTP ${res.status}`);
 }
 // ── Background poller (when webhook is set) ────────────────────────────────
 async function startBackgroundPoller() {
@@ -157,18 +158,23 @@ async function startBackgroundPoller() {
         return;
     console.log(`[weixin-mcp] Webhook enabled: ${webhookUrl}`);
     console.log("[weixin-mcp] Starting background poller...");
+    let pending;
     while (true) {
         try {
-            const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
-            const cursor = loadCursor(accountId);
-            const resp = await getUpdates(token, baseUrl, cursor);
-            if (resp.get_updates_buf)
-                saveCursor(accountId, resp.get_updates_buf);
+            if (!pending) {
+                const { token, baseUrl = DEFAULT_BASE_URL, accountId } = loadAccount();
+                const response = await getUpdates(token, baseUrl, loadCursor(accountId));
+                pending = { accountId, response };
+            }
+            const { accountId, response: resp } = pending;
             if (resp.msgs && resp.msgs.length > 0) {
-                updateContactsFromMsgs(resp.msgs);
                 await pushToWebhook(resp.msgs);
+                updateContactsFromMsgs(resp.msgs);
                 console.log(`[weixin-mcp] Pushed ${resp.msgs.length} message(s) to webhook`);
             }
+            if (resp.get_updates_buf)
+                saveCursor(accountId, resp.get_updates_buf);
+            pending = undefined;
         }
         catch (err) {
             console.error("[weixin-mcp] poll error:", fmtErr(err));
@@ -179,6 +185,26 @@ async function startBackgroundPoller() {
 }
 // ── Express HTTP server ────────────────────────────────────────────────────
 const app = express();
+// Local-only service: also reject browser cross-origin access and DNS rebinding.
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+app.use((req, res, next) => {
+    try {
+        const host = new URL(`http://${req.headers.host}`);
+        if (!loopbackHosts.has(host.hostname) || host.port !== String(port))
+            throw new Error("Invalid Host");
+        const originHeader = req.headers.origin;
+        if (originHeader) {
+            const origin = new URL(originHeader);
+            if (origin.protocol !== "http:" || !loopbackHosts.has(origin.hostname) || origin.port !== String(port)) {
+                throw new Error("Invalid Origin");
+            }
+        }
+        next();
+    }
+    catch {
+        res.status(403).json({ error: "Only local requests are allowed" });
+    }
+});
 app.use(express.json());
 const sessions = new Map();
 app.post("/mcp", async (req, res) => {
@@ -217,7 +243,7 @@ app.delete("/mcp", async (req, res) => {
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", port, sessions: sessions.size, webhook: webhookUrl ?? null });
 });
-app.listen(port, () => {
+app.listen(port, "127.0.0.1", () => {
     console.log(`[weixin-mcp] HTTP MCP server on port ${port}`);
     console.log(`[weixin-mcp] MCP: http://localhost:${port}/mcp`);
     if (webhookUrl)

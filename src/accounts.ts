@@ -8,7 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 
 interface AccountData {
   token?: string;
@@ -21,7 +21,7 @@ function listFiles(): string[] {
   try {
     return fs
       .readdirSync(ACCOUNTS_DIR)
-      .filter((f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"));
+      .filter(isAccountFile);
   } catch {
     return [];
   }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ACCOUNTS_DIR } from "./paths.js";
+import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import { daemonStatus } from "./daemon.js";
 
 export async function showStatus() {
@@ -21,7 +21,7 @@ export async function showStatus() {
   let files: string[];
   try {
     files = fs.readdirSync(ACCOUNTS_DIR).filter(
-      (f) => f.endsWith(".json") && !f.endsWith(".sync.json") && !f.endsWith(".cursor.json"),
+      isAccountFile,
     );
   } catch {
     console.log("❌ No accounts directory found.");
