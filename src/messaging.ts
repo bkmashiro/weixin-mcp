@@ -5,6 +5,7 @@
  */
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { ACCOUNTS_DIR, isAccountFile } from "./paths.js";
 import {
@@ -48,9 +49,32 @@ function loadAccount(): AccountData & { accountId: string } {
 }
 
 interface MediaItem {
-  media?: { encrypt_query_param?: string };
+  media?: { encrypt_query_param?: string; aes_key?: string };
   aeskey?: string;
   url?: string;
+}
+
+// Keep credentials out of terminal logs and shell history. IDs are local to this
+// account directory; the files deliberately contain no sender or filename.
+const mediaDir = path.join(ACCOUNTS_DIR, "media-downloads");
+
+function mediaReference(item: MediaItem): string {
+  const encryptQueryParam = item.media?.encrypt_query_param;
+  let aesKey = item.aeskey;
+  if (!aesKey && item.media?.aes_key) {
+    const decoded = Buffer.from(item.media.aes_key, "base64");
+    aesKey = decoded.length === 16 ? decoded.toString("hex") : decoded.toString("utf8");
+  }
+  if (!encryptQueryParam || !aesKey || !/^[a-fA-F0-9]{32}$/.test(aesKey)) {
+    return "download unavailable: missing or invalid credentials";
+  }
+  fs.mkdirSync(mediaDir, { recursive: true, mode: 0o700 });
+  fs.chmodSync(mediaDir, 0o700);
+  const id = crypto.randomBytes(16).toString("hex");
+  fs.writeFileSync(path.join(mediaDir, `${id}.json`),
+    JSON.stringify({ encryptQueryParam, aesKey } satisfies DownloadParams),
+    { mode: 0o600, flag: "wx" });
+  return `download --media-id ${id}`;
 }
 
 function formatMsg(msg: Record<string, unknown>): string {
@@ -67,32 +91,11 @@ function formatMsg(msg: Record<string, unknown>): string {
     if (item.type === 1 && item.text_item?.text) {
       parts.push(item.text_item.text);
     } else if (item.type === 2 && item.image_item) {
-      // Image
-      const img = item.image_item;
-      if (img.url) {
-        parts.push(`[image: ${img.url}]`);
-      } else if (img.media?.encrypt_query_param && img.aeskey) {
-        parts.push(`[image: encrypted | param=${img.media.encrypt_query_param.slice(0, 30)}... | key=${img.aeskey}]`);
-      } else {
-        parts.push(`[image: unknown format]`);
-      }
+      parts.push(`[image: ${mediaReference(item.image_item)}]`);
     } else if (item.type === 4 && item.file_item) {
-      // File
-      const file = item.file_item;
-      const name = file.file_name ?? "file";
-      if (file.media?.encrypt_query_param && file.aeskey) {
-        parts.push(`[file: ${name} | param=${file.media.encrypt_query_param.slice(0, 30)}... | key=${file.aeskey}]`);
-      } else {
-        parts.push(`[file: ${name}]`);
-      }
+      parts.push(`[file: ${item.file_item.file_name ?? "file"} | ${mediaReference(item.file_item)}]`);
     } else if (item.type === 5 && item.video_item) {
-      // Video
-      const vid = item.video_item;
-      if (vid.media?.encrypt_query_param && vid.aeskey) {
-        parts.push(`[video: encrypted | param=${vid.media.encrypt_query_param.slice(0, 30)}... | key=${vid.aeskey}]`);
-      } else {
-        parts.push(`[video]`);
-      }
+      parts.push(`[video: ${mediaReference(item.video_item)}]`);
     } else {
       parts.push(`[type:${item.type}]`);
     }
@@ -210,15 +213,18 @@ export async function cliSend(args: string[]) {
 
 /**
  * Download media from a received message.
- * Usage: npx weixin-mcp download --encrypt-param <param> --aes-key <key> -o <output>
+ * Usage: npx weixin-mcp download --media-id <id> -o <output>
  */
 export async function cliDownload(args: string[]) {
   let encryptParam = "";
   let aesKey = "";
   let outputPath = "";
+  let mediaId = "";
   
   for (let i = 0; i < args.length; i++) {
-    if ((args[i] === "--encrypt-param" || args[i] === "-e") && args[i + 1]) {
+    if (args[i] === "--media-id" && args[i + 1]) {
+      mediaId = args[++i];
+    } else if ((args[i] === "--encrypt-param" || args[i] === "-e") && args[i + 1]) {
       encryptParam = args[++i];
     } else if ((args[i] === "--aes-key" || args[i] === "-k") && args[i + 1]) {
       aesKey = args[++i];
@@ -227,12 +233,26 @@ export async function cliDownload(args: string[]) {
     }
   }
   
-  if (!encryptParam || !aesKey) {
-    console.error(`Usage: npx weixin-mcp download --encrypt-param <param> --aes-key <key> [-o <output>]
+  if (mediaId) {
+    if (encryptParam || aesKey || !/^[a-f0-9]{32}$/.test(mediaId)) {
+      throw new Error("Use a valid --media-id alone, without raw credentials");
+    }
+    try {
+      const saved = JSON.parse(fs.readFileSync(path.join(mediaDir, `${mediaId}.json`), "utf8"));
+      if (typeof saved.encryptQueryParam !== "string" || !saved.encryptQueryParam ||
+          typeof saved.aesKey !== "string" || !/^[a-fA-F0-9]{32}$/.test(saved.aesKey)) throw new Error();
+      encryptParam = saved.encryptQueryParam;
+      aesKey = saved.aesKey;
+    } catch {
+      throw new Error("Media reference unavailable or invalid; use the same WEIXIN_MCP_DIR as poll");
+    }
+  }
 
-Extract these values from a received message:
-  - encrypt_query_param: from image_item.media.encrypt_query_param or file_item.media.encrypt_query_param
-  - aes_key: from image_item.aeskey or file_item's aes_key (hex string)`);
+  if (!encryptParam || !aesKey) {
+    console.error(`Usage: npx weixin-mcp download --media-id <id> [-o <output>]
+       npx weixin-mcp download --encrypt-param <param> --aes-key <hex-key> [-o <output>]
+
+Use the media ID printed by poll. Raw credentials may be exposed in shell history.`);
     process.exit(1);
   }
   
@@ -251,7 +271,8 @@ Extract these values from a received message:
     }
   } catch (err) {
     console.log("❌");
-    console.error(err instanceof Error ? err.message : String(err));
+    // Network/CDN errors can contain a credential-bearing URL.
+    console.error("Media download failed. Check the reference, network, key and output path.");
     process.exit(1);
   }
 }
@@ -269,16 +290,16 @@ export async function cliPoll(args: string[]) {
     while (true) {
       try {
         const resp = await getUpdates(token!, baseUrl, cursor);
-        if (resp.get_updates_buf) {
-          cursor = resp.get_updates_buf;
-          saveCursor(accountId, cursor);
-        }
         if (resp.msgs && resp.msgs.length > 0) {
           updateContactsFromMsgs(resp.msgs as unknown[]);
           const ts = new Date().toLocaleTimeString();
           for (const msg of resp.msgs) {
             console.log(`[${ts}] ${formatMsg(msg as Record<string, unknown>)}`);
           }
+        }
+        if (resp.get_updates_buf) {
+          saveCursor(accountId, resp.get_updates_buf);
+          cursor = resp.get_updates_buf;
         }
       } catch (err) {
         console.error("Poll error:", err instanceof Error ? err.message : String(err));
@@ -290,7 +311,6 @@ export async function cliPoll(args: string[]) {
     // One-shot poll
     const cursor = reset ? "" : loadCursor(accountId);
     const resp = await getUpdates(token!, baseUrl, cursor);
-    if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
     if (resp.msgs && resp.msgs.length > 0) updateContactsFromMsgs(resp.msgs as unknown[]);
 
     const msgs = resp.msgs ?? [];
@@ -302,5 +322,6 @@ export async function cliPoll(args: string[]) {
         console.log(formatMsg(msg as Record<string, unknown>));
       }
     }
+    if (resp.get_updates_buf) saveCursor(accountId, resp.get_updates_buf);
   }
 }

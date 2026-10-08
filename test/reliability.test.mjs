@@ -62,7 +62,10 @@ test("text and all media senders reject HTTP-200 business failures", async () =>
       }
     }
     global.fetch = async () => new Response(JSON.stringify({ ret: 0, errcode: 0 }));
-    await sendFileMessage("fake", media, "token", "https://example.com");
+    await sendTextMessage("fake", "hello", "token", "https://example.com");
+    for (const send of [sendImageMessage, sendFileMessage, sendVideoMessage]) {
+      await send("fake", media, "token", "https://example.com");
+    }
   } finally { global.fetch = original; }
 });
 
