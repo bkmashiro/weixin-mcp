@@ -217,3 +217,18 @@ Claude Desktop 配置多账号：
 ## 📄 License
 
 MIT © [bkmashiro](https://github.com/bkmashiro)
+
+### 下载收到的媒体（CLI）
+
+`poll`（包括 `--watch`）为图片、文件和视频显示本地媒体 ID，不打印下载凭据：
+
+```sh
+weixin-mcp poll
+weixin-mcp download --media-id <poll显示的ID> -o ./received.bin
+```
+
+完整参数和 AES key 保存在账号目录下 `media-downloads/<ID>.json`，目录/文件的 POSIX 权限为 0700/0600；Windows 上请使用仅自己可访问的账号目录。下载须使用与 poll 相同的 `WEIXIN_MCP_DIR`（或默认目录），无需重新登录。引用不会自动过期或清理；不再需要时删除对应 JSON，删除整个 `media-downloads` 会使所有引用失效。不要分享这些文件。CDN 上的媒体可能独立过期。
+
+兼容旧的 `download -e <完整参数> -k <32位hex密钥> -o <路径>`，但参数可能进入 shell 历史和进程列表，建议使用 ID。缺失/无效凭据或仅含 URL 的媒体显示不可下载，不输出 URL。未指定 `-o` 时仍仅显示原有 base64 预览。
+
+合成回归测试覆盖三种媒体、顶层 hex / `media.aes_key` base64 密钥、模拟 CDN 和 AES 解密；不代表已验证真实微信用户上传媒体。

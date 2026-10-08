@@ -83,6 +83,9 @@ function decryptAesEcb(ciphertext, key) {
  */
 export async function downloadMedia(params) {
     const { encryptQueryParam, aesKey } = params;
+    if (!encryptQueryParam || !/^[a-fA-F0-9]{32}$/.test(aesKey)) {
+        throw new Error("Invalid media download parameters (expected a 128-bit hex key)");
+    }
     // Build download URL
     const cdnUrl = `${CDN_BASE_URL}/download?encrypted_query_param=${encodeURIComponent(encryptQueryParam)}`;
     const res = await fetch(cdnUrl, {
@@ -92,8 +95,7 @@ export async function downloadMedia(params) {
         },
     });
     if (!res.ok) {
-        const errMsg = res.headers.get("x-error-message") ?? `status ${res.status}`;
-        throw new Error(`CDN download failed: ${errMsg}`);
+        throw new Error(`CDN download failed: status ${res.status}`);
     }
     const ciphertext = Buffer.from(await res.arrayBuffer());
     // Decrypt

@@ -216,3 +216,18 @@ Claude Desktop multi-account config:
 ## 📄 License
 
 MIT © [bkmashiro](https://github.com/bkmashiro)
+
+### Download received media (CLI)
+
+`poll` (including `--watch`) prints a local media ID for images, files and videos instead of credentials:
+
+```sh
+weixin-mcp poll
+weixin-mcp download --media-id <ID-from-poll> -o ./received.bin
+```
+
+Full parameters and AES keys are stored under the accounts directory in `media-downloads/<ID>.json`, with POSIX directory/file modes 0700/0600. On Windows, use an account directory accessible only to you. Use the same `WEIXIN_MCP_DIR` (or default directory) for both commands; downloading does not require login. References have no automatic expiry or cleanup: delete individual JSON files when finished, or remove `media-downloads` to invalidate all references. Do not share these files. CDN media may expire independently.
+
+The legacy `download -e <full-param> -k <32-character-hex-key> -o <path>` remains supported, but credentials can enter shell history and process listings. Prefer IDs. Missing/invalid credentials and URL-only media are marked unavailable without printing URLs. Without `-o`, the existing base64 preview behavior is retained.
+
+Synthetic regressions cover all three media types, top-level hex / `media.aes_key` base64 keys, mocked CDN responses and AES decryption. They do not establish real WeChat user-upload interoperability.

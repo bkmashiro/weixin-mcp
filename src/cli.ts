@@ -133,6 +133,7 @@ Commands:
   send <userId> --file <path> [--caption <text>]   Send a file
   send <userId> --video <path> [--caption <text>]  Send a video
   poll [--watch|-w] [--reset]  Poll messages once, or watch continuously
+  download --media-id <id> [-o file]  Download media referenced by poll
   download --encrypt-param <p> --aes-key <k> [-o file]  Download media from message
   accounts [list]              List all accounts
   accounts remove <id>         Remove an account
